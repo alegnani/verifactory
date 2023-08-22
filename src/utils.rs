@@ -1,0 +1,63 @@
+use serde_repr::Deserialize_repr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize_repr)]
+#[repr(u8)]
+pub enum Direction {
+    North = 0,
+    East = 2,
+    South = 4,
+    West = 6,
+}
+
+impl Direction {
+    pub fn rotate(&self, direction: Rotation, amount: u8) -> Self {
+        let incr = match direction {
+            Rotation::Clockwise => 2,
+            Rotation::Anticlockwise => 6,
+        };
+        let new_u8 = (*self as u8 + amount * incr) % 8;
+        new_u8.into()
+    }
+}
+
+impl From<u8> for Direction {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::North,
+            2 => Self::East,
+            4 => Self::South,
+            6 => Self::West,
+            _ => panic!("Direction is not in cardinal direction: ({})", value),
+        }
+    }
+}
+
+pub enum Rotation {
+    Clockwise,
+    Anticlockwise,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use Direction::*;
+    use Rotation::*;
+
+    #[test]
+    fn dir_rotate() {
+        let north = North;
+        let north2 = north.rotate(Clockwise, 4);
+        let north3 = north.rotate(Anticlockwise, 8);
+        assert_eq!(north, north2);
+        assert_eq!(north, north3);
+
+        let east = north.rotate(Clockwise, 1);
+        assert_eq!(east, East);
+
+        let south = east.rotate(Clockwise, 1);
+        assert_eq!(south, South);
+
+        let west = south.rotate(Clockwise, 1);
+        assert_eq!(west, West);
+    }
+}
