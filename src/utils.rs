@@ -1,4 +1,30 @@
+use std::ops::{Add, Sub};
+
+use serde::Deserialize;
 use serde_repr::Deserialize_repr;
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct Position<T> {
+    pub x: T,
+    pub y: T,
+}
+
+impl<T> Position<T>
+where
+    T: Add<Output = T> + Sub<Output = T> + Copy,
+{
+    pub fn shift(&self, direction: Direction, distance: T) -> Self {
+        let x = self.x;
+        let y = self.y;
+        let (x, y) = match direction {
+            Direction::North => (self.x, self.y + distance),
+            Direction::East => (self.x + distance, self.y),
+            Direction::South => (self.x, self.y - distance),
+            Direction::West => (self.x - distance, self.y),
+        };
+        Self { x, y }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize_repr)]
 #[repr(u8)]
