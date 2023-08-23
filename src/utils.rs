@@ -44,6 +44,10 @@ impl Direction {
         let new_u8 = (*self as u8 + amount * incr) % 8;
         new_u8.into()
     }
+
+    pub fn flip(&self) -> Self {
+        self.rotate(Rotation::Clockwise, 2)
+    }
 }
 
 impl From<u8> for Direction {
