@@ -159,12 +159,12 @@ fn snap_to_grid(entities: &mut [Entity<f64>]) {
                 };
                 splitter.get_base_mut().shift_mut(shift_dir, 0.5);
             }
-            /* snap inserters to grid as the position is the destination location of the arm */
+            /* flip direction of inserters */
             Entity::Inserter(inserter) => {
                 let dir = inserter.get_base().direction;
                 inserter.get_base_mut().direction = dir.flip();
             }
-            /* snap long inserters to grid as the position is the destination location of the arm */
+            /* flip direction of long inserters */
             Entity::LongInserter(inserter) => {
                 let dir = inserter.get_base().direction;
                 inserter.get_base_mut().direction = dir.flip();
@@ -175,15 +175,18 @@ fn snap_to_grid(entities: &mut [Entity<f64>]) {
 }
 
 fn normalize_entities(entities: &[Entity<f64>]) -> Vec<Entity<i32>> {
+    let padding = 2.0;
     let max_y = entities
         .iter()
         .map(|e| e.get_base().position.y)
-        .fold(f64::NAN, f64::max);
+        .fold(f64::NAN, f64::max)
+        + padding;
 
     let min_x = entities
         .iter()
         .map(|e| e.get_base().position.x)
-        .fold(f64::NAN, f64::min);
+        .fold(f64::NAN, f64::min)
+        - padding;
 
     entities
         .iter()
@@ -232,7 +235,7 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<Entity<i32>>> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        entities::{self, BeltType, Priority},
+        entities::{BeltType, Priority},
         utils::Direction,
     };
 
@@ -295,7 +298,7 @@ mod tests {
         let entities = get_belt_entities();
         for e in entities {
             if let Entity::Underground(u) = e {
-                if u.base.position.y == 0 {
+                if u.base.position.y == 2 {
                     assert_eq!(u.belt_type, BeltType::Input);
                 } else {
                     assert_eq!(u.belt_type, BeltType::Output);
