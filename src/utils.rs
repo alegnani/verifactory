@@ -3,7 +3,7 @@ use std::ops::{Add, Sub};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub struct Position<T> {
     pub x: T,
     pub y: T,

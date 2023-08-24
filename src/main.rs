@@ -1,4 +1,5 @@
 mod base_entity;
+mod compiler;
 mod entities;
 mod import;
 mod ir;
