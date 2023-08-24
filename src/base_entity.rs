@@ -2,9 +2,11 @@ use std::ops::{Add, Sub};
 
 use crate::utils::{Direction, Position};
 
+pub type EntityId = i32;
+
 #[derive(Debug, Clone, Copy)]
 pub struct BaseEntity<T> {
-    pub id: i32,
+    pub id: EntityId,
     pub position: Position<T>,
     pub direction: Direction,
     pub throughput: f64,
