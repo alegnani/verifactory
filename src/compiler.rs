@@ -39,6 +39,18 @@ impl FeedsMap {
     }
 }
 
+/// Creates a relation of positions that feed other positions
+///
+/// Note that this can NOT be used to perform a reachability analysis as the two sides of the splitters are not connected.
+///        __
+///       |  \
+/// A ->  |   ⟩ -> C
+///       |__/
+///       |  \
+/// B ->  |   ⟩ -> D
+///       |__/
+/// This only generates the following relation: {A->C, B->D}.
+/// To perform reachability analysis one would need to also include A->D and B->C.
 pub fn populate_feeds_from(entities: &[Entity<i32>]) -> FeedsMap {
     let mut feeds_from = FeedsMap::new();
 
@@ -80,6 +92,37 @@ pub fn populate_feeds_from(entities: &[Entity<i32>]) -> FeedsMap {
             Entity::Assembler(_) => (),
         };
     }
+    feeds_from
+}
+
+/// Creates a relation of positions that feed other positions
+///
+/// Usable to peform reachability analysis.
+/// ```
+///        __
+///       |  \
+/// A ->  |   ⟩ -> C
+///       |__/
+///       |  \
+/// B ->  |   ⟩ -> D
+///       |__/
+/// ```
+/// Generates the following relation: {A->C, A->D, B->C, B->D}.
+pub fn populate_feeds_from_reachability(entities: &[Entity<i32>]) -> FeedsMap {
+    let mut feeds_from = populate_feeds_from(entities);
+
+    for e in entities {
+        if let Entity::Splitter(_) = e {
+            let base = e.get_base();
+            let pos = base.position;
+            let dir = base.direction;
+
+            let phantom = pos.shift(dir.rotate(Rotation::Anticlockwise, 1), 1);
+            feeds_from.add(&phantom, pos.shift(dir, 1));
+            feeds_from.add(&pos, phantom.shift(dir, 1));
+        }
+    }
+
     feeds_from
 }
 
