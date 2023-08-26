@@ -1,3 +1,9 @@
+mod compile_entities;
+
+use petgraph::{
+    prelude::NodeIndex,
+    Direction::{Incoming, Outgoing},
+};
 use relations::Relation;
 use std::{
     collections::{HashMap, HashSet},
@@ -8,10 +14,12 @@ use std::{
 
 use crate::{
     base_entity::EntityId,
-    entities::{BeltType, Entity, EntityTrait, Underground},
-    ir::{Input, Node},
-    utils::{Direction, Position, Rotation},
+    entities::{BeltType, Entity, EntityTrait, Splitter, Underground},
+    ir::{self, Connector, Edge, FlowGraph, Input, Node, Output, Side},
+    utils::{Direction, Position},
 };
+
+use self::compile_entities::AddToGraph;
 
 trait RelationMap<T>
 where
@@ -170,15 +178,15 @@ impl Compiler {
                     let phantom = s.get_phantom();
                     add_feeds_to(&mut feeds_to, pos_to_entity, phantom, dir);
                 }
-                Entity::Inserter(_) => {
-                    let input = pos.shift(dir.rotate(Rotation::Anticlockwise, 2), 1);
-                    let output = pos.shift(dir, 1);
-                    feeds_to.add(&input, output);
+                Entity::Inserter(l) => {
+                    let source = l.get_source();
+                    let destination = l.get_destination();
+                    feeds_to.add(&source, destination);
                 }
-                Entity::LongInserter(_) => {
-                    let input = pos.shift(dir.rotate(Rotation::Anticlockwise, 2), 2);
-                    let output = pos.shift(dir, 2);
-                    feeds_to.add(&input, output);
+                Entity::LongInserter(l) => {
+                    let source = l.get_source();
+                    let destination = l.get_destination();
+                    feeds_to.add(&source, destination);
                 }
                 Entity::Assembler(_) => (),
             };
@@ -219,32 +227,6 @@ impl Compiler {
         self.pos_to_entity.get(position).map(|e| e.get_base().id)
     }
 
-    pub fn generate_ir_inputs(&self) -> Vec<Node> {
-        self.belt_positions
-            .iter()
-            .filter_map(|k| {
-                if self.feeds_from.get(k).is_none() {
-                    let id = self.pos_to_id(k).unwrap();
-                    return Some(Node::Input(Input { id }));
-                }
-                None
-            })
-            .collect()
-    }
-
-    pub fn generate_ir_outputs(&self) -> Vec<Node> {
-        self.belt_positions
-            .iter()
-            .filter_map(|k| {
-                if self.feeds_to.get(k).is_none() {
-                    let id = self.pos_to_id(k).unwrap();
-                    return Some(Node::Input(Input { id }));
-                }
-                None
-            })
-            .collect()
-    }
-
     /// Creates a relation of positions that feed other positions
     ///
     /// Usable to peform reachability analysis.
@@ -281,6 +263,106 @@ impl Compiler {
     }
 }
 
+impl Compiler {
+    pub fn find_input_positions(&self) -> Vec<Position<i32>> {
+        self.belt_positions
+            .iter()
+            .filter(|k| self.feeds_from.get(k).is_none())
+            .cloned()
+            .collect()
+    }
+
+    pub fn find_output_positions(&self) -> Vec<Position<i32>> {
+        self.belt_positions
+            .iter()
+            .filter(|k| self.feeds_to.get(k).is_none())
+            .cloned()
+            .collect()
+    }
+
+    pub fn create_graph(&self) -> FlowGraph {
+        let mut graph = petgraph::Graph::new();
+
+        let mut pos_to_connector = HashMap::new();
+
+        for e in &self.entities {
+            match **e {
+                Entity::Splitter(splitter) => {
+                    splitter.add_to_graph(&mut graph, &mut pos_to_connector)
+                }
+                Entity::Belt(belt) => belt.add_to_graph(&mut graph, &mut pos_to_connector),
+                _ => (),
+            }
+        }
+        for (source, set) in &self.feeds_to {
+            if let Some(source_idx) = pos_to_connector.get(source).map(|i| i.1) {
+                for dest in set {
+                    if let Some(dest_idx) = pos_to_connector.get(dest).map(|i| i.0) {
+                        let edge = Edge {
+                            side: None,
+                            capacity: 69.0,
+                        };
+                        graph.add_edge(source_idx, dest_idx, edge);
+                    }
+                }
+            }
+        }
+        /* promote suitable connectors to input or output nodes */
+        for node in graph.node_indices() {
+            if let Some(Node::Connector(c)) = graph.node_weight(node) {
+                let id = c.id;
+                let in_degree = graph.neighbors_directed(node, Incoming).count();
+                let out_degree = graph.neighbors_directed(node, Outgoing).count();
+
+                let is_output = out_degree == 0;
+                let is_input = in_degree == 0;
+                /* if the connector is not connected, leave it as is */
+                if is_input ^ is_output {
+                    let new_node = if is_input {
+                        Node::Input(Input { id })
+                    } else {
+                        Node::Output(Output { id })
+                    };
+                    let node_ref = graph.node_weight_mut(node).unwrap();
+                    *node_ref = new_node;
+                }
+            }
+        }
+        graph
+    }
+
+    /* FIXME: this does not work */
+    fn shrink_graph(mut graph: FlowGraph) -> FlowGraph {
+        for node in graph.node_indices() {
+            if let Some(Node::Connector(_)) = graph.node_weight(node) {
+                let mut in_edges = graph.edges_directed(node, Incoming);
+                let mut out_edges = graph.edges_directed(node, Outgoing);
+
+                let in_degree = in_edges.clone().count();
+                let out_degree = out_edges.clone().count();
+                /* only connectors with in_deg = out_deg = 1 can be shrunk */
+                if out_degree != 1 || in_degree != 1 {
+                    continue;
+                }
+                let in_node = in_edges.next().unwrap();
+                let out_node = out_edges.next().unwrap();
+                let new_cap = in_node.weight().capacity.min(out_node.weight().capacity);
+                let new_edge = Edge {
+                    capacity: new_cap,
+                    side: None,
+                };
+                let source_node = graph.neighbors_directed(node, Incoming).next().unwrap();
+                let dest_node = graph.neighbors_directed(node, Incoming).next().unwrap();
+
+                graph.remove_node(node);
+                graph.add_edge(source_node, dest_node, new_edge);
+            }
+        }
+
+        graph
+    }
+}
+
 fn find_underground_output<I>(underground: &Underground<i32>, outputs: I) -> Option<Position<i32>>
 where
     I: Iterator<Item = Rc<Entity<i32>>> + Clone,
@@ -308,6 +390,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use petgraph::dot::Dot;
+
     use crate::import::string_to_entities;
 
     use super::*;
@@ -320,6 +404,11 @@ mod tests {
 
     fn get_io_test() -> Vec<Entity<i32>> {
         let blueprint_string = fs::read_to_string("tests/input_output_gen").unwrap();
+        string_to_entities(&blueprint_string).unwrap()
+    }
+
+    fn load(file: &str) -> Vec<Entity<i32>> {
+        let blueprint_string = fs::read_to_string(file).unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
 
@@ -339,7 +428,7 @@ mod tests {
     fn inputs_generation() {
         let entities = get_io_test();
         let ctx = Compiler::new(entities);
-        let inputs = ctx.generate_ir_inputs();
+        let inputs = ctx.find_input_positions();
         println!("{:?}", inputs);
     }
 
@@ -347,7 +436,31 @@ mod tests {
     fn outputs_generation() {
         let entities = get_io_test();
         let ctx = Compiler::new(entities);
-        let outputs = ctx.generate_ir_outputs();
+        let outputs = ctx.find_output_positions();
         println!("{:?}", outputs);
+    }
+
+    #[test]
+    fn compile_splitter() {
+        let entities = get_io_test();
+        let ctx = Compiler::new(entities);
+        let graph = ctx.create_graph();
+        println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    #[test]
+    fn graph_test() {
+        let entities = load("tests/graph_test");
+        let ctx = Compiler::new(entities);
+        let graph = ctx.create_graph();
+        println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    #[test]
+    fn belt_weave() {
+        let entities = load("tests/belt_weave");
+        let ctx = Compiler::new(entities);
+        let graph = ctx.create_graph();
+        println!("{:?}", Dot::with_config(&graph, &[]));
     }
 }
