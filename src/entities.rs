@@ -1,4 +1,9 @@
-use crate::base_entity::BaseEntity;
+use std::ops::{Add, Sub};
+
+use crate::{
+    base_entity::BaseEntity,
+    utils::{Position, Rotation},
+};
 use serde::Deserialize;
 
 pub trait EntityTrait<T> {
@@ -119,6 +124,14 @@ pub struct Splitter<T> {
     pub base: BaseEntity<T>,
     pub input_prio: Priority,
     pub output_prio: Priority,
+}
+
+impl Splitter<i32> {
+    pub fn get_phantom(&self) -> Position<i32> {
+        let base = self.get_base();
+        let rotation = base.direction.rotate(Rotation::Anticlockwise, 1);
+        self.get_base().position.shift(rotation, 1)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
