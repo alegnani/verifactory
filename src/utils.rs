@@ -17,10 +17,10 @@ where
         let x = self.x;
         let y = self.y;
         let (x, y) = match direction {
-            Direction::North => (self.x, self.y + distance),
-            Direction::East => (self.x + distance, self.y),
-            Direction::South => (self.x, self.y - distance),
-            Direction::West => (self.x - distance, self.y),
+            Direction::North => (x, y + distance),
+            Direction::East => (x + distance, y),
+            Direction::South => (x, y - distance),
+            Direction::West => (x - distance, y),
         };
         Self { x, y }
     }
