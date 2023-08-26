@@ -291,6 +291,7 @@ impl Compiler {
                     splitter.add_to_graph(&mut graph, &mut pos_to_connector)
                 }
                 Entity::Belt(belt) => belt.add_to_graph(&mut graph, &mut pos_to_connector),
+                Entity::Underground(under) => under.add_to_graph(&mut graph, &mut pos_to_connector),
                 _ => (),
             }
         }
@@ -328,38 +329,55 @@ impl Compiler {
                 }
             }
         }
-        graph
+        Self::shrink_graph(graph)
     }
 
+    fn is_connector(idx: NodeIndex, graph: &FlowGraph) -> bool {
+        graph
+            .node_weight(idx)
+            .map(|n| matches!(n, Node::Connector(_)))
+            .unwrap_or(false)
+    }
     /* FIXME: this does not work */
     fn shrink_graph(mut graph: FlowGraph) -> FlowGraph {
-        for node in graph.node_indices() {
-            if let Some(Node::Connector(_)) = graph.node_weight(node) {
-                let mut in_edges = graph.edges_directed(node, Incoming);
-                let mut out_edges = graph.edges_directed(node, Outgoing);
+        'outer: loop {
+            for node in graph.node_indices() {
+                if let Some(Node::Connector(_)) = graph.node_weight(node) {
+                    let mut in_edges = graph.edges_directed(node, Incoming);
+                    let mut out_edges = graph.edges_directed(node, Outgoing);
 
-                let in_degree = in_edges.clone().count();
-                let out_degree = out_edges.clone().count();
-                /* only connectors with in_deg = out_deg = 1 can be shrunk */
-                if out_degree != 1 || in_degree != 1 {
-                    continue;
+                    /* only connectors with in_deg = out_deg = 1 can be shrunk */
+                    let in_degree = in_edges.clone().count();
+                    let out_degree = out_edges.clone().count();
+                    if out_degree != 1 || in_degree != 1 {
+                        continue;
+                    }
+
+                    /* only shrink connectors between two connectors */
+                    let source_node = graph.neighbors_directed(node, Incoming).next().unwrap();
+                    let dest_node = graph.neighbors_directed(node, Outgoing).next().unwrap();
+                    if !(Self::is_connector(source_node, &graph)
+                        || Self::is_connector(dest_node, &graph))
+                    {
+                        continue;
+                    }
+
+                    let in_node = in_edges.next().unwrap();
+                    let out_node = out_edges.next().unwrap();
+                    let new_cap = in_node.weight().capacity.min(out_node.weight().capacity);
+                    let new_edge = Edge {
+                        capacity: new_cap,
+                        side: None,
+                    };
+
+                    graph.add_edge(source_node, dest_node, new_edge);
+                    graph.remove_node(node);
+                    println!("Adding: {}->{}", source_node.index(), dest_node.index());
+                    continue 'outer;
                 }
-                let in_node = in_edges.next().unwrap();
-                let out_node = out_edges.next().unwrap();
-                let new_cap = in_node.weight().capacity.min(out_node.weight().capacity);
-                let new_edge = Edge {
-                    capacity: new_cap,
-                    side: None,
-                };
-                let source_node = graph.neighbors_directed(node, Incoming).next().unwrap();
-                let dest_node = graph.neighbors_directed(node, Incoming).next().unwrap();
-
-                graph.remove_node(node);
-                graph.add_edge(source_node, dest_node, new_edge);
             }
+            return graph;
         }
-
-        graph
     }
 }
 
@@ -459,6 +477,14 @@ mod tests {
     #[test]
     fn belt_weave() {
         let entities = load("tests/belt_weave");
+        let ctx = Compiler::new(entities);
+        let graph = ctx.create_graph();
+        println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    #[test]
+    fn underground_test() {
+        let entities = load("tests/underground_test");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
         println!("{:?}", Dot::with_config(&graph, &[]));
