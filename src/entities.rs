@@ -128,9 +128,9 @@ pub struct Splitter<T> {
 
 impl Splitter<i32> {
     pub fn get_phantom(&self) -> Position<i32> {
-        let base = self.get_base();
+        let base = self.base;
         let rotation = base.direction.rotate(Rotation::Anticlockwise, 1);
-        self.get_base().position.shift(rotation, 1)
+        base.position.shift(rotation, 1)
     }
 }
 
@@ -139,9 +139,33 @@ pub struct Inserter<T> {
     pub base: BaseEntity<T>,
 }
 
+impl Inserter<i32> {
+    pub fn get_source(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, -1)
+    }
+
+    pub fn get_destination(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, 1)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct LongInserter<T> {
     pub base: BaseEntity<T>,
+}
+
+impl LongInserter<i32> {
+    pub fn get_source(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, -2)
+    }
+
+    pub fn get_destination(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, 2)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
