@@ -2,10 +2,38 @@ use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
 use crate::{
-    entities::{Belt, Splitter, Underground},
+    entities::{Belt, Entity, EntityTrait, Splitter, Underground},
     ir::{self, Connector, Edge, FlowGraph, Node, Side},
     utils::Position,
 };
+
+fn add_belt_to_graph(
+    belt: &Entity<i32>,
+    graph: &mut FlowGraph,
+    pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
+) {
+    let base = belt.get_base();
+    let id = base.id;
+    let capacity = base.throughput;
+
+    /* add the nodes to the graph */
+    let input = Node::Connector(Connector { id });
+    let output = Node::Connector(Connector { id });
+    let in_idx = graph.add_node(input);
+    let out_idx = graph.add_node(output);
+
+    /* add the nodes to the connector map */
+    let pos = base.position;
+    pos_to_connector.insert(pos, (in_idx, out_idx));
+
+    /* add the edges */
+    let edge = Edge {
+        side: None,
+        capacity,
+    };
+
+    graph.add_edge(in_idx, out_idx, edge);
+}
 
 pub trait AddToGraph {
     fn add_to_graph(
@@ -21,26 +49,7 @@ impl AddToGraph for Belt<i32> {
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        let id = self.base.id;
-        let capacity = self.base.throughput;
-
-        /* add the nodes to the graph */
-        let input = Node::Connector(Connector { id });
-        let output = Node::Connector(Connector { id });
-        let in_idx = graph.add_node(input);
-        let out_idx = graph.add_node(output);
-
-        /* add the nodes to the connector map */
-        let pos = self.base.position;
-        pos_to_connector.insert(pos, (in_idx, out_idx));
-
-        /* add the edges */
-        let edge = Edge {
-            side: None,
-            capacity,
-        };
-
-        graph.add_edge(in_idx, out_idx, edge);
+        add_belt_to_graph(&Entity::Belt(*self), graph, pos_to_connector)
     }
 }
 
@@ -50,26 +59,7 @@ impl AddToGraph for Underground<i32> {
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        let id = self.base.id;
-        let capacity = self.base.throughput;
-
-        /* add the nodes to the graph */
-        let input = Node::Connector(Connector { id });
-        let output = Node::Connector(Connector { id });
-        let in_idx = graph.add_node(input);
-        let out_idx = graph.add_node(output);
-
-        /* add the nodes to the connector map */
-        let pos = self.base.position;
-        pos_to_connector.insert(pos, (in_idx, out_idx));
-
-        /* add the edges */
-        let edge = Edge {
-            side: None,
-            capacity,
-        };
-
-        graph.add_edge(in_idx, out_idx, edge);
+        add_belt_to_graph(&Entity::Underground(*self), graph, pos_to_connector)
     }
 }
 
