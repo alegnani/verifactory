@@ -3,7 +3,7 @@ use std::ops::{Add, Sub};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub struct Position<T> {
     pub x: T,
     pub y: T,
@@ -17,10 +17,10 @@ where
         let x = self.x;
         let y = self.y;
         let (x, y) = match direction {
-            Direction::North => (self.x, self.y + distance),
-            Direction::East => (self.x + distance, self.y),
-            Direction::South => (self.x, self.y - distance),
-            Direction::West => (self.x - distance, self.y),
+            Direction::North => (x, y + distance),
+            Direction::East => (x + distance, y),
+            Direction::South => (x, y - distance),
+            Direction::West => (x - distance, y),
         };
         Self { x, y }
     }
@@ -43,6 +43,10 @@ impl Direction {
         };
         let new_u8 = (*self as u8 + amount * incr) % 8;
         new_u8.into()
+    }
+
+    pub fn flip(&self) -> Self {
+        self.rotate(Rotation::Clockwise, 2)
     }
 }
 

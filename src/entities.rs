@@ -1,37 +1,29 @@
-use anyhow::Context;
-use serde::{de::Error, Deserialize, Deserializer};
-use serde_json::Value;
+use std::ops::{Add, Sub};
 
-use crate::{
-    base_entity::BaseEntity,
-    utils::{Direction, Position},
-};
+use crate::utils::{Direction, Position, Rotation};
+use serde::Deserialize;
 
-pub trait EntityTrait<T> {
-    fn get_base(&self) -> &BaseEntity<T>;
+pub type EntityId = i32;
+
+#[derive(Debug, Clone, Copy)]
+pub struct BaseEntity<T> {
+    pub id: EntityId,
+    pub position: Position<T>,
+    pub direction: Direction,
+    pub throughput: f64,
 }
 
-impl<T> EntityTrait<T> for Belt<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
+impl<T> BaseEntity<T>
+where
+    T: Add<Output = T> + Sub<Output = T> + Copy,
+{
+    pub fn shift(&self, direction: Direction, distance: T) -> Self {
+        let position = self.position.shift(direction, distance);
+        Self { position, ..*self }
     }
-}
 
-impl<T> EntityTrait<T> for Underground<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> EntityTrait<T> for Splitter<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> Splitter<T> {
-    pub fn get_base_mut(&mut self) -> &mut BaseEntity<T> {
-        &mut self.base
+    pub fn shift_mut(&mut self, direction: Direction, distance: T) {
+        self.position = self.position.shift(direction, distance);
     }
 }
 
@@ -40,21 +32,21 @@ pub enum Entity<T> {
     Belt(Belt<T>),
     Underground(Underground<T>),
     Splitter(Splitter<T>),
+    Inserter(Inserter<T>),
+    LongInserter(LongInserter<T>),
+    Assembler(Assembler<T>),
 }
 
 impl<T> Entity<T> {
-    fn as_inner(&self) -> &dyn EntityTrait<T> {
+    pub fn get_base(&self) -> &BaseEntity<T> {
         match self {
-            Self::Belt(x) => x as &dyn EntityTrait<T>,
-            Self::Underground(x) => x as &dyn EntityTrait<T>,
-            Self::Splitter(x) => x as &dyn EntityTrait<T>,
+            Self::Belt(b) => &b.base,
+            Self::Underground(b) => &b.base,
+            Self::Splitter(b) => &b.base,
+            Self::Inserter(b) => &b.base,
+            Self::LongInserter(b) => &b.base,
+            Self::Assembler(b) => &b.base,
         }
-    }
-}
-
-impl<T> EntityTrait<T> for Entity<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        self.as_inner().get_base()
     }
 }
 
@@ -91,96 +83,49 @@ pub struct Splitter<T> {
     pub output_prio: Priority,
 }
 
-impl<'de> Deserialize<'de> for BaseEntity<f64> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value: Value = Deserialize::deserialize(deserializer)?;
-
-        let id = value
-            .get("entity_number")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .ok_or(Error::missing_field("entity_number"))?;
-
-        let position: Position<f64> = value
-            .get("position")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .ok_or(Error::missing_field("position"))?;
-
-        let direction = value
-            .get("direction")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or(Direction::North);
-
-        let base = BaseEntity {
-            id,
-            position,
-            direction,
-            throughput: 0.0,
-        };
-        Ok(base)
+impl Splitter<i32> {
+    pub fn get_phantom(&self) -> Position<i32> {
+        let base = self.base;
+        let rotation = base.direction.rotate(Rotation::Anticlockwise, 1);
+        base.position.shift(rotation, 1)
     }
 }
 
-impl<'de> Deserialize<'de> for Entity<f64> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value: Value = Deserialize::deserialize(deserializer)?;
+#[derive(Debug, Clone, Copy)]
+pub struct Inserter<T> {
+    pub base: BaseEntity<T>,
+}
 
-        let name = value
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or(Error::missing_field("name"))?;
-
-        let mut base: BaseEntity<f64> = serde_json::from_value(value.clone())
-            .map_err(|_| Error::custom("Could not deserialize BaseEntity"))?;
-        base.throughput = if name.contains("express") {
-            45.0
-        } else if name.contains("fast") {
-            30.0
-        } else {
-            15.0
-        };
-
-        if name.contains("transport-belt") {
-            Ok(Self::Belt(Belt { base }))
-        } else if name.contains("underground-belt") {
-            let belt_type = value
-                .get("type")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .ok_or(Error::missing_field("type"))?;
-
-            Ok(Self::Underground(Underground { base, belt_type }))
-        } else if name.contains("splitter") {
-            let input_prio = value
-                .get("input_priority")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or(Priority::None);
-
-            let output_prio = value
-                .get("output_priority")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or(Priority::None);
-
-            Ok(Self::Splitter(Splitter {
-                base,
-                input_prio,
-                output_prio,
-            }))
-        } else {
-            base.throughput = if name == "inserter" {
-                0.83
-            } else if name.contains("burner") {
-                0.6
-            } else if name.contains("long-handed") {
-                1.2
-            } else {
-                2.31
-            };
-            panic!("Ony belt-related stuff is implemented");
-        }
+impl Inserter<i32> {
+    pub fn get_source(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, -1)
     }
+
+    pub fn get_destination(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, 1)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LongInserter<T> {
+    pub base: BaseEntity<T>,
+}
+
+impl LongInserter<i32> {
+    pub fn get_source(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, -2)
+    }
+
+    pub fn get_destination(&self) -> Position<i32> {
+        let base = self.base;
+        self.base.position.shift(base.direction, 2)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Assembler<T> {
+    pub base: BaseEntity<T>,
 }
