@@ -1,5 +1,7 @@
 //! The intermediate representaton used for the conversion between a factorio blue
 
+mod graph_algos;
+
 use crate::{base_entity::EntityId, entities::Priority};
 
 /// An entity in the intermerdiate representation can either be a splitter or a merger.
@@ -52,6 +54,18 @@ pub enum Node {
     ///
     /// Element with in_deg = 1 and out_deg = 0
     Output(Output),
+}
+
+impl Node {
+    pub fn get_id(&self) -> EntityId {
+        match self {
+            Node::Connector(c) => c.id,
+            Node::Input(i) => i.id,
+            Node::Merger(m) => m.id,
+            Node::Output(o) => o.id,
+            Node::Splitter(s) => s.id,
+        }
+    }
 }
 
 /// Element that merges two inputs into a single output, optionally prioritizing one side.
