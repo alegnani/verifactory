@@ -358,7 +358,10 @@ where
 mod tests {
     use petgraph::dot::Dot;
 
-    use crate::import::string_to_entities;
+    use crate::{
+        import::string_to_entities,
+        ir::{ShrinkStrength, Shrinkable},
+    };
 
     use super::*;
     use std::fs;
@@ -427,14 +430,9 @@ mod tests {
         let entities = load("tests/belt_weave");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
+        let graph = graph.shrink(ShrinkStrength::Aggressive);
         println!("{:?}", Dot::with_config(&graph, &[]));
-    }
-
-    #[test]
-    fn underground_test() {
-        let entities = load("tests/underground_test");
-        let ctx = Compiler::new(entities);
-        let graph = ctx.create_graph();
-        println!("{:?}", Dot::with_config(&graph, &[]));
+        assert_eq!(graph.node_count(), 2);
+        assert_eq!(graph.edge_count(), 1);
     }
 }

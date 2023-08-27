@@ -2,6 +2,8 @@
 
 mod graph_algos;
 
+pub use graph_algos::*;
+
 use crate::entities::{EntityId, Priority};
 
 /// An entity in the intermerdiate representation can either be a splitter or a merger.
