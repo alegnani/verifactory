@@ -40,7 +40,7 @@ impl Shrinkable for FlowGraph {
                     /* only shrink connectors between connectors, inputs or outputs */
                     let source_node = self.neighbors_directed(node, Incoming).next().unwrap();
                     let dest_node = self.neighbors_directed(node, Outgoing).next().unwrap();
-                    if !(is_valid_shrink(source_node, &self) || is_valid_shrink(dest_node, &self)) {
+                    if !(is_valid_shrink(source_node, &self) && is_valid_shrink(dest_node, &self)) {
                         continue;
                     }
                     /* check for the ShrinkStrength */
