@@ -2,7 +2,7 @@ use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
 use crate::{
-    entities::{Belt, Entity, EntityTrait, Splitter, Underground},
+    entities::{Belt, Entity, Splitter, Underground},
     ir::{self, Connector, Edge, FlowGraph, Node, Side},
     utils::Position,
 };

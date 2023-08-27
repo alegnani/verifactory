@@ -1,66 +1,29 @@
 use std::ops::{Add, Sub};
 
-use crate::{
-    base_entity::BaseEntity,
-    utils::{Position, Rotation},
-};
+use crate::utils::{Direction, Position, Rotation};
 use serde::Deserialize;
 
-pub trait EntityTrait<T> {
-    fn get_base(&self) -> &BaseEntity<T>;
+pub type EntityId = i32;
+
+#[derive(Debug, Clone, Copy)]
+pub struct BaseEntity<T> {
+    pub id: EntityId,
+    pub position: Position<T>,
+    pub direction: Direction,
+    pub throughput: f64,
 }
 
-impl<T> EntityTrait<T> for Belt<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
+impl<T> BaseEntity<T>
+where
+    T: Add<Output = T> + Sub<Output = T> + Copy,
+{
+    pub fn shift(&self, direction: Direction, distance: T) -> Self {
+        let position = self.position.shift(direction, distance);
+        Self { position, ..*self }
     }
-}
 
-impl<T> EntityTrait<T> for Underground<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> EntityTrait<T> for Splitter<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> EntityTrait<T> for Inserter<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> EntityTrait<T> for LongInserter<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> EntityTrait<T> for Assembler<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        &self.base
-    }
-}
-
-impl<T> Splitter<T> {
-    pub fn get_base_mut(&mut self) -> &mut BaseEntity<T> {
-        &mut self.base
-    }
-}
-
-impl<T> Inserter<T> {
-    pub fn get_base_mut(&mut self) -> &mut BaseEntity<T> {
-        &mut self.base
-    }
-}
-
-impl<T> LongInserter<T> {
-    pub fn get_base_mut(&mut self) -> &mut BaseEntity<T> {
-        &mut self.base
+    pub fn shift_mut(&mut self, direction: Direction, distance: T) {
+        self.position = self.position.shift(direction, distance);
     }
 }
 
@@ -75,21 +38,15 @@ pub enum Entity<T> {
 }
 
 impl<T> Entity<T> {
-    fn as_inner(&self) -> &dyn EntityTrait<T> {
+    pub fn get_base(&self) -> &BaseEntity<T> {
         match self {
-            Self::Belt(x) => x as &dyn EntityTrait<T>,
-            Self::Underground(x) => x as &dyn EntityTrait<T>,
-            Self::Splitter(x) => x as &dyn EntityTrait<T>,
-            Self::Inserter(x) => x as &dyn EntityTrait<T>,
-            Self::LongInserter(x) => x as &dyn EntityTrait<T>,
-            Self::Assembler(x) => x as &dyn EntityTrait<T>,
+            Self::Belt(b) => &b.base,
+            Self::Underground(b) => &b.base,
+            Self::Splitter(b) => &b.base,
+            Self::Inserter(b) => &b.base,
+            Self::LongInserter(b) => &b.base,
+            Self::Assembler(b) => &b.base,
         }
-    }
-}
-
-impl<T> EntityTrait<T> for Entity<T> {
-    fn get_base(&self) -> &BaseEntity<T> {
-        self.as_inner().get_base()
     }
 }
 

@@ -5,9 +5,8 @@ use serde::{de::Error, Deserialize, Deserializer};
 use serde_json::Value;
 
 use crate::{
-    base_entity::BaseEntity,
     entities::{
-        Assembler, Belt, Entity, EntityTrait, Inserter, LongInserter, Priority, Splitter,
+        Assembler, BaseEntity, Belt, Entity, Inserter, LongInserter, Priority, Splitter,
         Underground,
     },
     utils::{
@@ -150,24 +149,24 @@ fn snap_to_grid(entities: &mut [Entity<f64>]) {
         match e {
             /* snap splitters to the grid as they are offset by 0.5 */
             Entity::Splitter(splitter) => {
-                let shift_dir = splitter.get_base().direction.rotate(Anticlockwise, 1);
+                let shift_dir = splitter.base.direction.rotate(Anticlockwise, 1);
                 /* in Factorio blueprints the y-axis is inverted */
                 let shift_dir = match shift_dir {
                     East => West,
                     West => East,
                     x => x,
                 };
-                splitter.get_base_mut().shift_mut(shift_dir, 0.5);
+                splitter.base.shift_mut(shift_dir, 0.5);
             }
             /* flip direction of inserters */
             Entity::Inserter(inserter) => {
-                let dir = inserter.get_base().direction;
-                inserter.get_base_mut().direction = dir.flip();
+                let dir = inserter.base.direction;
+                inserter.base.direction = dir.flip();
             }
             /* flip direction of long inserters */
             Entity::LongInserter(inserter) => {
-                let dir = inserter.get_base().direction;
-                inserter.get_base_mut().direction = dir.flip();
+                let dir = inserter.base.direction;
+                inserter.base.direction = dir.flip();
             }
             _ => (),
         }

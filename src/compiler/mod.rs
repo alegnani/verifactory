@@ -1,9 +1,6 @@
 mod compile_entities;
 
-use petgraph::{
-    prelude::NodeIndex,
-    Direction::{Incoming, Outgoing},
-};
+use petgraph::Direction::{Incoming, Outgoing};
 use relations::Relation;
 use std::{
     collections::{HashMap, HashSet},
@@ -13,9 +10,8 @@ use std::{
 };
 
 use crate::{
-    base_entity::EntityId,
-    entities::{BeltType, Entity, EntityTrait, Splitter, Underground},
-    ir::{self, Connector, Edge, FlowGraph, Input, Node, Output, Side},
+    entities::{BeltType, Entity, EntityId, Underground},
+    ir::{Edge, FlowGraph, Input, Node, Output},
     utils::{Direction, Position},
 };
 
