@@ -101,7 +101,7 @@ impl Z3Node for Merger {
         let ctx = solver.get_context();
 
         /* create cost variable */
-        let cost_name = format!("cost{}", idx.index());
+        let cost_name = format!("merger_cost{}", idx.index());
         let cost = Real::new_const(ctx, cost_name);
 
         /* kirchhoff on input and outgoing edge */
@@ -119,7 +119,7 @@ impl Z3Node for Merger {
 
         /* add the cost to the costs */
         solver.assert(&cost._eq(&abs_cost));
-        helper.costs.push(cost);
+        helper.merger_costs.push(cost);
     }
 }
 
@@ -129,7 +129,7 @@ impl Z3Node for Splitter {
         let ctx = solver.get_context();
 
         /* create cost variable */
-        let cost_name = format!("cost{}", idx.index());
+        let cost_name = format!("splitter_cost{}", idx.index());
         let cost = Real::new_const(ctx, cost_name);
 
         /* kirchhoff on input and outgoing edge */
@@ -147,7 +147,7 @@ impl Z3Node for Splitter {
 
         /* add the cost to the costs */
         solver.assert(&cost._eq(&abs_cost));
-        helper.costs.push(cost);
+        helper.splitter_costs.push(cost);
     }
 }
 
