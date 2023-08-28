@@ -55,9 +55,7 @@ impl Shrinkable for FlowGraph {
                     continue;
                 }
 
-                println!("{}-> <> ->{}", in_deg, out_deg);
                 if in_deg == 0 || out_deg == 0 {
-                    println!("removed");
                     self.remove_node(node_idx);
                     continue 'outer;
                 }
