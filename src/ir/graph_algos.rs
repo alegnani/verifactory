@@ -10,6 +10,8 @@ use petgraph::{
 /// Indicates how much a graph is shrunk.
 /// Shrinking is performed on a Connector S, where A->S->B, with in_deg(S) = out_deg(S) = 1.
 /// The result of the shrinking operation is A->B, with the edge having the minimum of the capacities of the previous two edges.
+/// Shrinking also removes connectors with a missing in- or out-edge, e.g. after removing an input or output node.
+/// Following this also splitters and mergers with only one out- and in-edge, respectively, get optimized away.
 pub enum ShrinkStrength {
     /// Shrinking without loss of information about the structure of the blueprint.
     /// Shrinks only if:
@@ -22,17 +24,23 @@ pub enum ShrinkStrength {
     Aggressive,
 }
 pub trait Shrinkable {
-    fn is_valid_shrink(&self, idx: NodeIndex) -> bool;
     fn shrink(self, strength: ShrinkStrength) -> Self;
     fn remove_entities(self, exclude_list: &[EntityId]) -> Self;
 }
 
-impl Shrinkable for FlowGraph {
+trait ShrinkableHelper {
+    fn is_valid_shrink(&self, idx: NodeIndex) -> bool;
+}
+
+impl ShrinkableHelper for FlowGraph {
     fn is_valid_shrink(&self, idx: NodeIndex) -> bool {
         self.node_weight(idx)
             .map(|n| matches!(n, Node::Connector(_) | Node::Input(_) | Node::Output(_)))
             .unwrap_or(false)
     }
+}
+
+impl Shrinkable for FlowGraph {
     fn shrink(mut self, strength: ShrinkStrength) -> Self {
         'outer: loop {
             for node_idx in self.node_indices() {
@@ -60,7 +68,7 @@ impl Shrinkable for FlowGraph {
                     Node::Connector(_) => {
                         /* only connectors with in_deg = out_deg = 1 can be shrunk.
                          * only shrink connectors between connectors, inputs or outputs. */
-                        if !(self.is_valid_shrink(source_node) || self.is_valid_shrink(target_node))
+                        if !(self.is_valid_shrink(source_node) && self.is_valid_shrink(target_node))
                         {
                             continue;
                         }
@@ -93,6 +101,11 @@ impl Shrinkable for FlowGraph {
                 };
                 let in_edge = in_edges[0].weight();
                 let out_edge = out_edges[0].weight();
+                /* When shrinking connectors use join in order to preserve
+                 * side information for splitters/mergers.
+                 * When shrinking mergers/splitters we can safely loose this
+                 * information (or at least in the case of no inserters and no
+                 * 2-sided belts). */
                 let new_edge = if should_join {
                     in_edge.join(out_edge)
                 } else {
@@ -141,11 +154,10 @@ mod test {
     #[test]
     fn test_shrinking() {
         let entities = load("tests/3-2-broken");
-        let ctx = Compiler::new(entities);
-        let graph = ctx.create_graph();
-        println!("{:?}", Dot::with_config(&graph, &[]));
-        let graph = graph.remove_entities(&[4, 5, 6]);
-        let graph = graph.shrink(ShrinkStrength::Aggressive);
+        let graph = Compiler::new(entities)
+            .create_graph()
+            .remove_entities(&[4, 5, 6])
+            .shrink(ShrinkStrength::Aggressive);
         println!("{:?}", Dot::with_config(&graph, &[]));
     }
 }
