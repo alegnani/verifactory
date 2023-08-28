@@ -381,16 +381,6 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn get_belt_entities() -> Vec<Entity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/feeds_from").unwrap();
-        string_to_entities(&blueprint_string).unwrap()
-    }
-
-    fn get_io_test() -> Vec<Entity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/input_output_gen").unwrap();
-        string_to_entities(&blueprint_string).unwrap()
-    }
-
     fn load(file: &str) -> Vec<Entity<i32>> {
         let blueprint_string = fs::read_to_string(file).unwrap();
         string_to_entities(&blueprint_string).unwrap()
@@ -398,7 +388,7 @@ mod tests {
 
     #[test]
     fn feeds_to() {
-        let entities = get_belt_entities();
+        let entities = load("tests/feeds_from");
         let ctx = Compiler::new(entities);
         let feeds_to = ctx.feeds_to_reachability();
         let feeds_from = ctx.feeds_from_reachability();
@@ -410,7 +400,7 @@ mod tests {
 
     #[test]
     fn inputs_generation() {
-        let entities = get_io_test();
+        let entities = load("test/input_output_gen");
         let ctx = Compiler::new(entities);
         let inputs = ctx.find_input_positions();
         println!("{:?}", inputs);
@@ -418,7 +408,7 @@ mod tests {
 
     #[test]
     fn outputs_generation() {
-        let entities = get_io_test();
+        let entities = load("test/input_output_gen");
         let ctx = Compiler::new(entities);
         let outputs = ctx.find_output_positions();
         println!("{:?}", outputs);
@@ -426,7 +416,7 @@ mod tests {
 
     #[test]
     fn compile_splitter() {
-        let entities = get_io_test();
+        let entities = load("test/input_output_gen");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
         println!("{:?}", Dot::with_config(&graph, &[]));
