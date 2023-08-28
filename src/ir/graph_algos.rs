@@ -68,7 +68,7 @@ impl Shrinkable for FlowGraph {
                     Node::Connector(_) => {
                         /* only connectors with in_deg = out_deg = 1 can be shrunk.
                          * only shrink connectors between connectors, inputs or outputs. */
-                        if !(self.is_valid_shrink(source_node) || self.is_valid_shrink(target_node))
+                        if !(self.is_valid_shrink(source_node) && self.is_valid_shrink(target_node))
                         {
                             continue;
                         }
