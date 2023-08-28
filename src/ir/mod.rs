@@ -113,8 +113,13 @@ pub struct Splitter {
     pub id: EntityId,
 }
 
+pub trait Lattice {
+    fn meet(&self, other: &Self) -> Self;
+    fn join(&self, other: &Self) -> Self;
+}
+
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
     Left,
     Right,
@@ -130,6 +135,22 @@ impl From<Priority> for Option<Side> {
     }
 }
 
+impl Lattice for Option<Side> {
+    fn join(&self, other: &Self) -> Self {
+        match (self, other) {
+            (None, x) | (x, None) => *x,
+            (Some(x), Some(y)) if x == y => Some(*x),
+            _ => panic!(),
+        }
+    }
+    fn meet(&self, other: &Self) -> Self {
+        match (self, other) {
+            (Some(x), Some(y)) if y == x => Some(*x),
+            _ => None,
+        }
+    }
+}
+
 /// An edge connecting two nodes
 #[derive(Debug, Clone, Copy)]
 pub struct Edge {
@@ -140,6 +161,21 @@ pub struct Edge {
     /// For example, if this represents a line of belts, the capacity is the min capacity
     /// of all belts in the line.
     pub capacity: f64,
+}
+
+impl Lattice for Edge {
+    fn meet(&self, other: &Self) -> Self {
+        let side = self.side.meet(&other.side);
+        let capacity = self.capacity.min(other.capacity);
+        Self { side, capacity }
+    }
+
+    fn join(&self, other: &Self) -> Self {
+        let side = self.side.meet(&other.side);
+        /* should be max but we don't want this kind of join */
+        let capacity = self.capacity.min(other.capacity);
+        Self { side, capacity }
+    }
 }
 
 pub type FlowGraph = petgraph::Graph<Node, Edge, petgraph::Directed>;
