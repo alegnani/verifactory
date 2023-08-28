@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn inputs_generation() {
-        let entities = load("test/input_output_gen");
+        let entities = load("tests/input_output_gen");
         let ctx = Compiler::new(entities);
         let inputs = ctx.find_input_positions();
         println!("{:?}", inputs);
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn outputs_generation() {
-        let entities = load("test/input_output_gen");
+        let entities = load("tests/input_output_gen");
         let ctx = Compiler::new(entities);
         let outputs = ctx.find_output_positions();
         println!("{:?}", outputs);
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn compile_splitter() {
-        let entities = load("test/input_output_gen");
+        let entities = load("tests/input_output_gen");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
         println!("{:?}", Dot::with_config(&graph, &[]));
