@@ -187,6 +187,21 @@ impl Compiler {
                 Entity::Assembler(_) => (),
             };
         }
+        /* validate that noting feeds into an output underground except for an input underground */
+        for (source, set) in feeds_to.iter_mut() {
+            set.retain(|dest| {
+                let source_entity = pos_to_entity.get(source);
+                let dest_entity = pos_to_entity.get(dest);
+                if let (Some(source), Some(dest)) = (source_entity, dest_entity) {
+                    let dest_is_output = matches!(**dest, Entity::Underground(x) if x.belt_type == BeltType::Output);
+                    let source_is_input = matches!(**source, Entity::Underground(x) if x.belt_type == BeltType::Input);
+                    return !dest_is_output || source_is_input;
+                }
+                true
+            });
+        }
+        feeds_to.retain(|_, set| !set.is_empty());
+
         feeds_to
     }
 
