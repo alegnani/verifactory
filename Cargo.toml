@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "<=1.0.171"
 base64 = "0.21.2"
+graphviz-rust = "0.6.6"
 inflate = "0.4.5"
 petgraph = "0.6.4"
 relations = "0.3.0"

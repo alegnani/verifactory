@@ -434,8 +434,8 @@ mod tests {
     fn belt_weave() {
         let entities = load("tests/belt_weave");
         let ctx = Compiler::new(entities);
-        let graph = ctx.create_graph();
-        let graph = graph.shrink(ShrinkStrength::Aggressive);
+        let mut graph = ctx.create_graph();
+        graph.coalesce_nodes(ShrinkStrength::Aggressive);
         println!("{:?}", Dot::with_config(&graph, &[]));
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);

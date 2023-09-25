@@ -244,15 +244,6 @@ mod tests {
     }
 
     #[test]
-    fn test_belt_shrink() {
-        let g = load("tests/simple_belt");
-        let g = g.shrink(ShrinkStrength::Aggressive);
-        let s = Z3Backend::new(g);
-        s.model();
-        println!("{}", s.solver);
-    }
-
-    #[test]
     fn test_splitter() {
         let g = load("tests/simple_splitter");
         let s = Z3Backend::new(g);
