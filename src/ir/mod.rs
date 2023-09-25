@@ -4,6 +4,12 @@ mod graph_algos;
 
 pub use graph_algos::*;
 
+use petgraph::{
+    prelude::{EdgeIndex, NodeIndex},
+    visit::{EdgeRef, IntoEdgesDirected, IntoNeighborsDirected, NodeRef},
+    Direction::{Incoming, Outgoing},
+};
+
 use crate::entities::{EntityId, Priority};
 
 /// An entity in the intermerdiate representation can either be a splitter or a merger.
@@ -125,6 +131,15 @@ pub enum Side {
     Right,
 }
 
+impl Side {
+    pub fn other(&self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+}
+
 impl From<Priority> for Option<Side> {
     fn from(value: Priority) -> Self {
         match value {
@@ -179,3 +194,103 @@ impl Lattice for Edge {
 }
 
 pub type FlowGraph = petgraph::Graph<Node, Edge, petgraph::Directed>;
+
+pub trait GraphHelper {
+    fn in_deg(&self, node_idx: NodeIndex) -> usize;
+    fn out_deg(&self, node_idx: NodeIndex) -> usize;
+
+    fn in_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex>;
+    fn out_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex>;
+
+    fn in_edges(&self, node_idx: NodeIndex) -> Vec<&Edge>;
+    fn out_edges(&self, node_idx: NodeIndex) -> Vec<&Edge>;
+
+    fn in_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
+    fn out_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
+
+    fn get_node(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> NodeIndex;
+    fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex;
+    fn get_mut_edge(
+        &mut self,
+        node_idx: NodeIndex,
+        dir: petgraph::Direction,
+        side: Side,
+    ) -> &mut Edge;
+}
+
+impl GraphHelper for FlowGraph {
+    fn in_deg(&self, node_idx: NodeIndex) -> usize {
+        self.edges_directed(node_idx, Incoming).count()
+    }
+
+    fn out_deg(&self, node_idx: NodeIndex) -> usize {
+        self.edges_directed(node_idx, Outgoing).count()
+    }
+
+    fn in_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex> {
+        self.edges_directed(node_idx, Incoming)
+            .map(|e| e.source())
+            .collect()
+    }
+
+    fn out_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex> {
+        self.edges_directed(node_idx, Outgoing)
+            .map(|e| e.target())
+            .collect()
+    }
+
+    fn get_node(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> NodeIndex {
+        self.edges_directed(node_idx, dir)
+            .find(|e| matches!(e.weight().side, Some(x) if x == side))
+            .map(|e| match dir {
+                Incoming => e.source(),
+                Outgoing => e.target(),
+            })
+            .unwrap()
+    }
+
+    fn in_edges(&self, node_idx: NodeIndex) -> Vec<&Edge> {
+        self.edges_directed(node_idx, Incoming)
+            .map(|e| e.weight())
+            .collect()
+    }
+
+    fn out_edges(&self, node_idx: NodeIndex) -> Vec<&Edge> {
+        self.edges_directed(node_idx, Outgoing)
+            .map(|e| e.weight())
+            .collect()
+    }
+
+    fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex {
+        self.edges_directed(node_idx, dir)
+            .find(|e| matches!(e.weight().side, Some(x) if x == side))
+            .map(|e| e.id())
+            .unwrap()
+    }
+
+    fn get_mut_edge(
+        &mut self,
+        node_idx: NodeIndex,
+        dir: petgraph::Direction,
+        side: Side,
+    ) -> &mut Edge {
+        let edge_id = self
+            .edges_directed(node_idx, dir)
+            .find(|e| matches!(e.weight().side, Some(x) if x == side))
+            .map(|e| e.id())
+            .unwrap();
+        &mut self[edge_id]
+    }
+
+    fn out_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex> {
+        self.edges_directed(node_idx, Outgoing)
+            .map(|e| e.id())
+            .collect()
+    }
+
+    fn in_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex> {
+        self.edges_directed(node_idx, Incoming)
+            .map(|e| e.id())
+            .collect()
+    }
+}

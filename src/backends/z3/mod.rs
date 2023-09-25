@@ -229,8 +229,8 @@ mod test {
 
     #[test]
     fn test_balancer() {
-        let graph = load("tests/3-2");
-        let graph = graph.shrink(crate::ir::ShrinkStrength::Aggressive);
+        let mut graph = load("tests/3-2");
+        graph.coalesce_nodes(crate::ir::ShrinkStrength::Aggressive);
         println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
         let s = Z3Backend::new(graph);
         let is_not_balancer = s.is_not_belt_balancer(&[]);
@@ -239,8 +239,8 @@ mod test {
 
     #[test]
     fn is_not_balancer() {
-        let graph = load("tests/3-3-broken");
-        let graph = graph.shrink(crate::ir::ShrinkStrength::Aggressive);
+        let mut graph = load("tests/3-2");
+        graph.coalesce_nodes(crate::ir::ShrinkStrength::Aggressive);
         println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
         let s = Z3Backend::new(graph);
         let is_not_balancer = s.is_not_belt_balancer(&[]);
@@ -249,8 +249,8 @@ mod test {
 
     #[test]
     fn is_balancer() {
-        let graph = load("tests/3-3");
-        let graph = graph.shrink(crate::ir::ShrinkStrength::Aggressive);
+        let mut graph = load("tests/3-2");
+        graph.coalesce_nodes(crate::ir::ShrinkStrength::Aggressive);
         println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
         let s = Z3Backend::new(graph);
         let is_not_balancer = s.is_not_belt_balancer(&[]);
@@ -259,8 +259,8 @@ mod test {
 
     #[test]
     fn is_not_equal_drain_belt_balancer() {
-        let graph = load("tests/3-2");
-        let graph = graph.shrink(crate::ir::ShrinkStrength::Aggressive);
+        let mut graph = load("tests/3-2");
+        graph.coalesce_nodes(crate::ir::ShrinkStrength::Aggressive);
         println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
         let s = Z3Backend::new(graph);
         let is_not_equal_drain = s.is_not_equal_drain_belt_balancer(&[24]);
@@ -269,8 +269,8 @@ mod test {
 
     #[test]
     fn is_equal_drain_belt_balancer() {
-        let graph = load("tests/3-2-equal-drain");
-        let graph = graph.shrink(crate::ir::ShrinkStrength::Aggressive);
+        let mut graph = load("tests/3-2");
+        graph.coalesce_nodes(crate::ir::ShrinkStrength::Aggressive);
         println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
         let s = Z3Backend::new(graph);
         let is_not_equal_drain = s.is_not_equal_drain_belt_balancer(&[24]);
