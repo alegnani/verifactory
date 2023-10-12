@@ -4,11 +4,7 @@ use crate::{entities::EntityId, ir::Lattice};
 
 use super::{FlowGraph, GraphHelper, Node};
 use graphviz_rust::{cmd::Format, exec_dot};
-use petgraph::{
-    dot::Dot,
-    prelude::{EdgeIndex, NodeIndex},
-    Direction::{Incoming, Outgoing},
-};
+use petgraph::{dot::Dot, prelude::EdgeIndex, Direction::Outgoing};
 
 /// Indicates how much a graph is coalesced.
 /// Coalescing is performed on a Connector S, where A->S->B, with in_deg(S) = out_deg(S) = 1.
@@ -67,7 +63,6 @@ impl FlowGraphFun for FlowGraph {
                 continue;
             }
 
-            self.to_svg("debug.svg");
             if self.shrink_capacities() {
                 continue;
             }

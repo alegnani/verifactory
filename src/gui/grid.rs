@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
-    entities::{BeltType, Entity, EntityId},
+    entities::{BeltType, Entity},
     utils::{Direction, Position},
 };
 

@@ -4,12 +4,12 @@ mod graph_algos;
 
 use std::fmt::Debug;
 
-use fraction::{Fraction, GenericFraction};
+use fraction::GenericFraction;
 pub use graph_algos::*;
 
 use petgraph::{
     prelude::{EdgeIndex, NodeIndex},
-    visit::{EdgeRef, IntoEdgesDirected, IntoNeighborsDirected, NodeRef},
+    visit::EdgeRef,
     Direction::{Incoming, Outgoing},
 };
 

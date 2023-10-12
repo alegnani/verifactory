@@ -3,9 +3,7 @@ use std::path::Path;
 use egui::{Ui, Window};
 use egui_file::FileDialog;
 
-use crate::{compiler::Compiler, ir::FlowGraphFun, utils::load_entities};
-
-use super::app::{GridSettings, IOState, MyApp, ProofState};
+use super::app::MyApp;
 
 #[derive(Default)]
 pub struct BlueprintString {

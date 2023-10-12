@@ -1,8 +1,8 @@
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::collections::HashMap;
 use z3::{
-    ast::{Ast, Int, Real},
-    Config, Context, SatResult, Solver,
+    ast::{Int, Real},
+    Config, Context, Solver,
 };
 
 use crate::ir::FlowGraph;

@@ -74,6 +74,12 @@ pub struct Compiler {
     pos_to_entity: HashMap<Position<i32>, Rc<Entity<i32>>>,
 }
 
+struct PostionSets {
+    positions: HashSet<Position<i32>>,
+    belt_positions: HashSet<Position<i32>>,
+    inserter_positions: HashSet<Position<i32>>,
+}
+
 impl Compiler {
     fn generate_pos_to_entity(
         entities: &Vec<Rc<Entity<i32>>>,
@@ -93,11 +99,7 @@ impl Compiler {
 
     fn generate_position_sets(
         pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
-    ) -> (
-        HashSet<Position<i32>>,
-        HashSet<Position<i32>>,
-        HashSet<Position<i32>>,
-    ) {
+    ) -> PostionSets {
         let positions = pos_to_entity.keys().cloned().collect::<HashSet<_>>();
 
         let belt_positions = pos_to_entity
@@ -108,7 +110,11 @@ impl Compiler {
             })
             .collect();
         let inserter_positions = positions.difference(&belt_positions).cloned().collect();
-        (positions, belt_positions, inserter_positions)
+        PostionSets {
+            positions,
+            belt_positions,
+            inserter_positions,
+        }
     }
 
     /// Creates a relation of positions that feed other positions
@@ -218,8 +224,11 @@ impl Compiler {
         let entities: Vec<_> = entities.into_iter().map(Rc::new).collect();
         let pos_to_entity = Self::generate_pos_to_entity(&entities);
 
-        let (positions, belt_positions, inserter_positions) =
-            Self::generate_position_sets(&pos_to_entity);
+        let PostionSets {
+            positions,
+            belt_positions,
+            inserter_positions,
+        } = Self::generate_position_sets(&pos_to_entity);
         let feeds_to = Self::populate_feeds_to(&pos_to_entity, &entities);
         let feeds_from = Self::populate_feeds_from(&pos_to_entity, &entities);
 
