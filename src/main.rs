@@ -1,27 +1,25 @@
 mod backends;
 mod compiler;
 mod entities;
+mod gui;
 mod import;
 mod ir;
 mod utils;
 
-use std::fs;
+use std::{fs::File, sync::Arc};
 
-use backends::Z3Backend;
-use ir::{ShrinkStrength, Shrinkable};
-use petgraph::dot::Dot;
+use eframe::NativeOptions;
+use gui::MyApp;
 
-use crate::{compiler::Compiler, import::string_to_entities};
-
-fn main() {
-    /* FIXME: this does not work as there is no counterexample with cost == 0
-     * given that some inputs of the mergers / outputs of the splitters are not present */
-    let blueprint_string = fs::read_to_string("tests/3-2-broken").unwrap();
-    let entities = string_to_entities(&blueprint_string).unwrap();
-    let mut graph = Compiler::new(entities).create_graph();
-    graph.coalesce_nodes(ShrinkStrength::Aggressive);
-    println!("Graph:\n{:?}", Dot::with_config(&graph, &[]));
-    let s = Z3Backend::new(graph);
-    let is_not_balancer = s.is_not_belt_balancer(&[2, 4, 5, 6]);
-    assert!(is_not_balancer);
+fn main() -> Result<(), eframe::Error> {
+    let file = File::create("debug.log").unwrap();
+    tracing_subscriber::fmt().with_writer(Arc::new(file)).init();
+    eframe::run_native(
+        "Factorio Verify",
+        NativeOptions::default(),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Box::<MyApp>::default()
+        }),
+    )
 }
