@@ -1,7 +1,12 @@
-use std::ops::{Add, Sub};
+use std::{
+    fs,
+    ops::{Add, Sub},
+};
 
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
+
+use crate::{entities::Entity, import::string_to_entities};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub struct Position<T> {
@@ -90,4 +95,9 @@ mod test {
         let west = south.rotate(Clockwise, 1);
         assert_eq!(west, West);
     }
+}
+
+pub fn load_entities(file: &str) -> Vec<Entity<i32>> {
+    let blueprint_string = fs::read_to_string(file).unwrap();
+    string_to_entities(&blueprint_string).unwrap()
 }
