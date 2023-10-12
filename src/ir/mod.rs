@@ -2,6 +2,9 @@
 
 mod graph_algos;
 
+use std::fmt::Debug;
+
+use fraction::{Fraction, GenericFraction};
 pub use graph_algos::*;
 
 use petgraph::{
@@ -167,7 +170,7 @@ impl Lattice for Option<Side> {
 }
 
 /// An edge connecting two nodes
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Edge {
     /// The side this edge corresponds to, if applicable. E.g. a belt's left or right side.
     pub side: Option<Side>,
@@ -175,7 +178,18 @@ pub struct Edge {
     ///
     /// For example, if this represents a line of belts, the capacity is the min capacity
     /// of all belts in the line.
-    pub capacity: f64,
+    pub capacity: GenericFraction<u128>,
+}
+
+impl Debug for Edge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let denom = *self.capacity.denom().unwrap() as f64;
+        let numer = *self.capacity.numer().unwrap() as f64;
+        f.debug_struct("Edge")
+            .field("side", &self.side)
+            .field("capacity", &(numer / denom))
+            .finish()
+    }
 }
 
 impl Lattice for Edge {
@@ -186,7 +200,7 @@ impl Lattice for Edge {
     }
 
     fn join(&self, other: &Self) -> Self {
-        let side = self.side.meet(&other.side);
+        let side = self.side.join(&other.side);
         /* should be max but we don't want this kind of join */
         let capacity = self.capacity.min(other.capacity);
         Self { side, capacity }
@@ -208,14 +222,7 @@ pub trait GraphHelper {
     fn in_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
     fn out_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
 
-    fn get_node(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> NodeIndex;
     fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex;
-    fn get_mut_edge(
-        &mut self,
-        node_idx: NodeIndex,
-        dir: petgraph::Direction,
-        side: Side,
-    ) -> &mut Edge;
 }
 
 impl GraphHelper for FlowGraph {
@@ -239,16 +246,6 @@ impl GraphHelper for FlowGraph {
             .collect()
     }
 
-    fn get_node(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> NodeIndex {
-        self.edges_directed(node_idx, dir)
-            .find(|e| matches!(e.weight().side, Some(x) if x == side))
-            .map(|e| match dir {
-                Incoming => e.source(),
-                Outgoing => e.target(),
-            })
-            .unwrap()
-    }
-
     fn in_edges(&self, node_idx: NodeIndex) -> Vec<&Edge> {
         self.edges_directed(node_idx, Incoming)
             .map(|e| e.weight())
@@ -261,27 +258,6 @@ impl GraphHelper for FlowGraph {
             .collect()
     }
 
-    fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex {
-        self.edges_directed(node_idx, dir)
-            .find(|e| matches!(e.weight().side, Some(x) if x == side))
-            .map(|e| e.id())
-            .unwrap()
-    }
-
-    fn get_mut_edge(
-        &mut self,
-        node_idx: NodeIndex,
-        dir: petgraph::Direction,
-        side: Side,
-    ) -> &mut Edge {
-        let edge_id = self
-            .edges_directed(node_idx, dir)
-            .find(|e| matches!(e.weight().side, Some(x) if x == side))
-            .map(|e| e.id())
-            .unwrap();
-        &mut self[edge_id]
-    }
-
     fn out_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex> {
         self.edges_directed(node_idx, Outgoing)
             .map(|e| e.id())
@@ -292,5 +268,12 @@ impl GraphHelper for FlowGraph {
         self.edges_directed(node_idx, Incoming)
             .map(|e| e.id())
             .collect()
+    }
+
+    fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex {
+        self.edges_directed(node_idx, dir)
+            .find(|e| matches!(e.weight().side, Some(x) if x == side))
+            .map(|e| e.id())
+            .unwrap()
     }
 }

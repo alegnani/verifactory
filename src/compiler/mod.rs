@@ -312,7 +312,7 @@ impl Compiler {
                     if let Some(dest_idx) = pos_to_connector.get(dest).map(|i| i.0) {
                         let edge = Edge {
                             side: None,
-                            capacity: 69.0,
+                            capacity: 69.into(),
                         };
                         graph.add_edge(source_idx, dest_idx, edge);
                     }
@@ -373,10 +373,7 @@ where
 mod tests {
     use petgraph::dot::Dot;
 
-    use crate::{
-        import::string_to_entities,
-        ir::{ShrinkStrength, Shrinkable},
-    };
+    use crate::{import::string_to_entities, ir::FlowGraphFun};
 
     use super::*;
     use std::fs;
@@ -435,9 +432,9 @@ mod tests {
         let entities = load("tests/belt_weave");
         let ctx = Compiler::new(entities);
         let mut graph = ctx.create_graph();
-        graph.coalesce_nodes(ShrinkStrength::Aggressive);
-        println!("{:?}", Dot::with_config(&graph, &[]));
+        graph.simplify(&[]);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
+        graph.to_svg("tests/belt_weave.svg").unwrap();
     }
 }

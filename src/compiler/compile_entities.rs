@@ -1,3 +1,4 @@
+use fraction::GenericFraction;
 use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
@@ -14,7 +15,7 @@ fn add_belt_to_graph(
 ) {
     let base = belt.get_base();
     let id = base.id;
-    let capacity = base.throughput;
+    let capacity = base.throughput.into();
 
     /* add the nodes to the graph */
     let input = Node::Connector(Connector { id });
@@ -78,7 +79,7 @@ impl AddToGraph for Splitter<i32> {
             output_priority,
             id,
         };
-        let capacity = self.base.throughput;
+        let capacity = self.base.throughput.into();
 
         /* add the nodes to the graph */
         let splitter_idx = graph.add_node(Node::Splitter(ir_splitter));
@@ -103,7 +104,7 @@ impl AddToGraph for Splitter<i32> {
         /* add the edges */
         let merger_splitter_edge = Edge {
             side: None,
-            capacity: capacity * 2.0,
+            capacity: capacity * GenericFraction::new(2u128, 1u128),
         };
         let r_edge = Edge {
             side: Some(Side::Right),
