@@ -309,6 +309,7 @@ impl ShrinkNodes for FlowGraph {
 
         let (new_out, new_a, new_b) = match in_cap.cmp(&out_cap) {
             Ordering::Equal => (out_cap, a_cap, b_cap),
+            /* FIXME: this is just an ugly fix */
             // Ordering::Less => (out_cap.min(a_cap + b_cap), a_cap, b_cap),
             Ordering::Less => (out_cap, a_cap, b_cap),
             Ordering::Greater => (out_cap, a_cap.min(out_cap), b_cap.min(out_cap)),

@@ -145,7 +145,6 @@ impl MyApp {
 
         self.graph = Compiler::new(loaded_entities).create_graph();
         self.graph.simplify(&[]);
-        self.graph.to_svg("main.svg");
         self.io_state = IOState::from_graph(&self.graph);
         self.proof_state = ProofState::default();
     }

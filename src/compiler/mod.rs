@@ -353,7 +353,7 @@ where
     let dir = base.direction;
     let throughput = base.throughput;
     let max_distance = 3 + 2 * throughput as i32 / 15;
-    /* online matching underground belt tiers can be connected */
+    /* only matching underground belt tiers can be connected */
     let outputs = outputs.filter(|u| u.get_base().throughput == throughput);
     /* XXX: runs in O(8n), with n = #outputs
      * can be improved to O(n) */
@@ -361,7 +361,9 @@ where
         let possible_output_pos = pos.shift(dir, dist);
         for candidate in outputs.clone() {
             let candidate_base = candidate.get_base();
-            if possible_output_pos == candidate_base.position {
+            let same_position = possible_output_pos == candidate_base.position;
+            let same_direction = dir == candidate_base.direction;
+            if same_position && same_direction {
                 return Some(candidate_base.position);
             }
         }
