@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use egui_file::FileDialog;
 use z3::SatResult;
@@ -12,7 +9,6 @@ use crate::{
     entities::{Entity, EntityId},
     import::string_to_entities,
     ir::{FlowGraph, FlowGraphFun, Node},
-    utils::load_entities,
 };
 
 use super::menu::BlueprintString;
@@ -74,6 +70,7 @@ impl IOState {
 #[derive(Default)]
 pub struct ProofState {
     balancer: Option<SatResult>,
+    equal_drain: Option<SatResult>,
 }
 
 pub struct MyApp {
@@ -205,6 +202,7 @@ impl eframe::App for MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Proofs");
             ui.separator();
+
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
@@ -212,6 +210,20 @@ impl eframe::App for MyApp {
                     self.proof_state.balancer = Some(z3.is_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
+                    ui.label(format!("Proof result: {:?}", proof_res));
+                }
+            });
+
+            ui.spacing();
+            ui.spacing();
+
+            ui.heading("Is it an equal drain belt-balancer? **Currently broken**");
+            ui.horizontal(|ui| {
+                if ui.button("Prove").clicked() {
+                    let z3 = self.generate_z3();
+                    self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
+                }
+                if let Some(proof_res) = self.proof_state.equal_drain {
                     ui.label(format!("Proof result: {:?}", proof_res));
                 }
             });
