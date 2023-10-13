@@ -7,7 +7,7 @@ use egui_file::FileDialog;
 use z3::SatResult;
 
 use crate::{
-    backends::{Z3Backend, Z3Proofs},
+    backends::{Printable, Z3Backend, Z3Proofs},
     compiler::{Compiler, RelMap},
     entities::{Entity, EntityId},
     import::string_to_entities,
@@ -239,7 +239,7 @@ impl eframe::App for MyApp {
                     self.proof_state.balancer = Some(z3.is_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
-                    ui.label(format!("Proof result: {:?}", proof_res));
+                    ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
 
@@ -252,7 +252,7 @@ impl eframe::App for MyApp {
                     self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
-                    ui.label(format!("Proof result: {:?}", proof_res));
+                    ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
             ui.label("\n");
