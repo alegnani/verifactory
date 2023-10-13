@@ -1,6 +1,7 @@
 //! The intermediate representaton used for the conversion between a factorio blue
 
 mod graph_algos;
+mod reverse;
 
 use std::fmt::Debug;
 
