@@ -3,14 +3,91 @@ use std::f32::consts::PI;
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
-    entities::{BeltType, Entity, EntityId},
-    utils::{Direction, Position},
+    compiler::RelMap,
+    entities::{Belt, BeltType, Entity, Priority, Splitter},
+    utils::{Direction, Position, Rotation},
 };
 
-use super::app::MyApp;
+use super::app::{EntityGrid, MyApp};
+
+trait ShrinkDirection {
+    fn shrink_dir(&self, side: Direction, amount: f32) -> Self;
+}
+
+impl ShrinkDirection for Rect {
+    fn shrink_dir(&self, side: Direction, amount: f32) -> Self {
+        let mut rect = *self;
+        match side {
+            Direction::North => rect.min += Vec2::new(0., amount),
+            Direction::East => rect.max += Vec2::new(-amount, 0.),
+            Direction::South => rect.max += Vec2::new(0., -amount),
+            Direction::West => rect.min += Vec2::new(amount, 0.),
+        }
+        rect
+    }
+}
+
+fn prio_rect(splitter: &Splitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
+    let dir = splitter.base.direction;
+    let mut vec = vec![];
+    match splitter.input_prio {
+        Priority::None => (),
+        x => {
+            let rot = splitter.base.direction.rotate_side(x);
+            let n_rect = rect
+                .shrink_dir(dir, size / 2.)
+                .shrink_dir(rot.flip(), 5. / 4. * size)
+                .shrink_dir(rot, size / 4.);
+            vec.push(n_rect);
+        }
+    }
+    match splitter.output_prio {
+        Priority::None => (),
+        x => {
+            let rot = splitter.base.direction.rotate_side(x);
+            let n_rect = rect
+                .shrink_dir(dir.flip(), size / 2.)
+                .shrink_dir(rot.flip(), 5. / 4. * size)
+                .shrink_dir(rot, size / 4.);
+            vec.push(n_rect);
+        }
+    }
+    vec
+}
+
+fn determine_belt_rotation(
+    belt: &Belt<i32>,
+    feeds_from_map: &RelMap<Position<i32>>,
+    grid: &EntityGrid,
+) -> Option<Rotation> {
+    let feeds_from = feeds_from_map.get(&belt.base.position);
+    feeds_from.and_then(|f| {
+        if f.len() != 1 {
+            None
+        } else {
+            let pos = f.iter().next().unwrap();
+            /* TODO: this is very inefficient, maybe keep a HashMap<Position<i32>, Entity<i32>> in MyApp */
+            let feeding_entity = grid
+                .iter()
+                .flatten()
+                .flatten()
+                .find(|&e| e.get_base().position == *pos)
+                .unwrap();
+            let feeding_dir = feeding_entity.get_base().direction;
+            let belt_dir = belt.base.direction;
+            if belt_dir == feeding_dir.rotate(Rotation::Anticlockwise, 1) {
+                Some(Rotation::Anticlockwise)
+            } else if belt_dir == feeding_dir.rotate(Rotation::Clockwise, 1) {
+                Some(Rotation::Clockwise)
+            } else {
+                None
+            }
+        }
+    })
+}
 
 impl MyApp {
-    pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> Vec<Vec<Option<Entity<i32>>>> {
+    pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> EntityGrid {
         let (max_x, max_y) = entities
             .iter()
             .map(|e| {
@@ -53,7 +130,7 @@ impl MyApp {
         }
     }
 
-    fn draw_io(&self, ui: &mut egui::Ui, rect: Rect, entity: &Entity<i32>) {
+    fn draw_io(&self, ui: &mut egui::Ui, mut rect: Rect, entity: &Entity<i32>) {
         let base = entity.get_base();
         let id = base.id;
         let is_input = self.io_state.input_entities.contains(&id);
@@ -71,8 +148,32 @@ impl MyApp {
             .rotate(rotation, Vec2::splat(0.5))
             .tint(color)
             .fit_to_fraction(Vec2::splat(0.7));
+        /* if the entity is a splitter force the arrow to be drawn in the middle */
+        if let Entity::Splitter(s) = entity {
+            let size = self.grid_settings.size as f32;
+            let rot = s
+                .base
+                .direction
+                .rotate(crate::utils::Rotation::Clockwise, 1);
+            rect = rect
+                .shrink_dir(rot, size / 2.)
+                .shrink_dir(rot.flip(), size / 2.);
+        }
         // draw the arrow
         ui.put(rect, img);
+    }
+
+    fn draw_prio(&self, ui: &mut egui::Ui, rect: Rect, splitter: &Splitter<i32>) {
+        let base = splitter.base;
+        let rotation = base.direction as u8 as f32 * PI / 4.;
+        let color = Color32::YELLOW;
+        let img = Image::new(egui::include_image!("../../imgs/arrow.svg"))
+            .rotate(rotation, Vec2::splat(0.5))
+            .tint(color);
+        let size = self.grid_settings.size as f32;
+        for p_rect in prio_rect(splitter, rect, size) {
+            ui.put(p_rect, img.clone());
+        }
     }
 
     fn draw_selection(&self, ui: &mut egui::Ui, rect: Rect) {
@@ -82,7 +183,7 @@ impl MyApp {
         ui.put(rect, img);
     }
 
-    fn get_entity_img(entity: &Entity<i32>) -> Image {
+    fn get_entity_img(entity: &Entity<i32>, belt_rotation: Option<Rotation>) -> Image {
         let base = entity.get_base();
         let rotation = base.direction as u8 as f32 * PI / 4.;
         match entity {
@@ -107,9 +208,15 @@ impl MyApp {
                 Entity::Underground(_) => Image::new(egui::include_image!(
                     "../../imgs/yellow_underground_output.png"
                 )),
-                Entity::Belt(_) => {
-                    Image::new(egui::include_image!("../../imgs/yellow_belt_straight.png"))
-                }
+                Entity::Belt(_) => match belt_rotation {
+                    None => Image::new(egui::include_image!("../../imgs/yellow_belt_straight.png")),
+                    Some(Rotation::Anticlockwise) => {
+                        Image::new(egui::include_image!("../../imgs/yellow_belt_anticlock.png"))
+                    }
+                    Some(Rotation::Clockwise) => {
+                        Image::new(egui::include_image!("../../imgs/yellow_belt_clock.png"))
+                    }
+                },
                 _ => panic!(),
             }
             .rotate(rotation, Vec2::splat(0.5)),
@@ -122,20 +229,26 @@ impl MyApp {
         let base = entity.get_base();
 
         let mut pos_rect = self.get_grid_rect(base.position);
-        let img = Self::get_entity_img(entity);
-        if let Entity::Splitter(_) = entity {
-            let size = s.size as f32;
-            pos_rect.min += match base.direction {
-                Direction::North => Vec2 { x: -size, y: 0. },
-                Direction::East => Vec2 { x: 0., y: -size },
-                _ => Vec2 { x: 0., y: 0. },
-            };
-            pos_rect.max += match base.direction {
-                Direction::South => Vec2 { x: size, y: 0. },
-                Direction::West => Vec2 { x: 0., y: size },
-                _ => Vec2 { x: 0., y: 0. },
-            };
+        let mut rotation = None;
+        match entity {
+            Entity::Splitter(_) => {
+                let size = s.size as f32;
+                pos_rect.min += match base.direction {
+                    Direction::North => Vec2 { x: -size, y: 0. },
+                    Direction::East => Vec2 { x: 0., y: -size },
+                    _ => Vec2 { x: 0., y: 0. },
+                };
+                pos_rect.max += match base.direction {
+                    Direction::South => Vec2 { x: size, y: 0. },
+                    Direction::West => Vec2 { x: 0., y: size },
+                    _ => Vec2 { x: 0., y: 0. },
+                };
+            }
+            Entity::Belt(b) => rotation = determine_belt_rotation(b, &self.feeds_from, &self.grid),
+            Entity::Underground(_) => (),
+            _ => return None,
         }
+        let img = Self::get_entity_img(entity, rotation);
 
         let ret = if ui.put(pos_rect, img).clicked() {
             Some(*entity)
@@ -145,6 +258,9 @@ impl MyApp {
         match self.selection {
             Some(sel) if sel.get_base().id == base.id => self.draw_selection(ui, pos_rect),
             _ => (),
+        }
+        if let Entity::Splitter(s) = entity {
+            self.draw_prio(ui, pos_rect, s);
         }
         self.draw_io(ui, pos_rect, entity);
         ret

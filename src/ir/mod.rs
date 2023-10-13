@@ -1,15 +1,17 @@
 //! The intermediate representaton used for the conversion between a factorio blue
 
 mod graph_algos;
+mod reverse;
 
+pub use self::reverse::Reversable;
 use std::fmt::Debug;
 
-use fraction::{Fraction, GenericFraction};
+use fraction::GenericFraction;
 pub use graph_algos::*;
 
 use petgraph::{
     prelude::{EdgeIndex, NodeIndex},
-    visit::{EdgeRef, IntoEdgesDirected, IntoNeighborsDirected, NodeRef},
+    visit::EdgeRef,
     Direction::{Incoming, Outgoing},
 };
 

@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::{
     entities::{
         Assembler, BaseEntity, Belt, Entity, Inserter, LongInserter, Priority, Splitter,
-        Underground,
+        SplitterPhantom, Underground,
     },
     utils::{
         Direction::{self, East, West},
@@ -139,7 +139,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
             };
             Ok(Self::Assembler(Assembler { base }))
         } else {
-            panic!();
+            Err(format!("Invalid entity: ({})", name)).map_err(serde::de::Error::custom)
         }
     }
 }
@@ -212,6 +212,7 @@ fn normalize_entities(entities: &[Entity<f64>]) -> Vec<Entity<i32>> {
                     input_prio: s.input_prio,
                     output_prio: s.output_prio,
                 }),
+                Entity::SplitterPhantom(_) => Entity::SplitterPhantom(SplitterPhantom { base }),
                 Entity::Inserter(_) => Entity::Inserter(Inserter { base }),
                 Entity::LongInserter(_) => Entity::LongInserter(LongInserter { base }),
                 Entity::Assembler(_) => Entity::Assembler(Assembler { base }),
@@ -224,11 +225,22 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<Entity<i32>>> {
     let json = decompress_string(blueprint_string)?;
     let mut entities: Vec<_> = get_json_entities(json)?
         .into_iter()
-        .map(serde_json::from_value)
-        .collect::<Result<Vec<_>, _>>()?;
+        .flat_map(serde_json::from_value)
+        .collect::<Vec<_>>();
 
     snap_to_grid(&mut entities);
-    Ok(normalize_entities(&entities))
+    let mut entities = normalize_entities(&entities);
+
+    /* add splitter phantoms */
+    let phantoms = entities
+        .iter()
+        .filter_map(|&e| match e {
+            Entity::Splitter(s) => Some(Entity::SplitterPhantom(s.get_phantom())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    entities.extend(phantoms);
+    Ok(entities)
 }
 
 #[cfg(test)]

@@ -60,7 +60,7 @@ where
     }
 }
 
-type RelMap<T> = HashMap<T, HashSet<T>>;
+pub type RelMap<T> = HashMap<T, HashSet<T>>;
 
 /* XXX: do we really need the entities vector?
  * => remove Rc, get entities with pos_to_entity.values() */
@@ -70,8 +70,14 @@ pub struct Compiler {
     belt_positions: HashSet<Position<i32>>,
     inserter_positions: HashSet<Position<i32>>,
     feeds_to: RelMap<Position<i32>>,
-    feeds_from: RelMap<Position<i32>>,
+    pub feeds_from: RelMap<Position<i32>>,
     pos_to_entity: HashMap<Position<i32>, Rc<Entity<i32>>>,
+}
+
+struct PostionSets {
+    positions: HashSet<Position<i32>>,
+    belt_positions: HashSet<Position<i32>>,
+    inserter_positions: HashSet<Position<i32>>,
 }
 
 impl Compiler {
@@ -80,12 +86,13 @@ impl Compiler {
     ) -> HashMap<Position<i32>, Rc<Entity<i32>>> {
         let mut pos_to_entity = entities
             .iter()
+            .filter(|&e| !matches!(**e, Entity::SplitterPhantom(_)))
             .map(|e| (e.get_base().position, e.clone()))
             .collect::<HashMap<_, _>>();
 
         for e in entities {
             if let Entity::Splitter(s) = **e {
-                pos_to_entity.insert(s.get_phantom(), e.clone());
+                pos_to_entity.insert(s.get_phantom().base.position, e.clone());
             }
         }
         pos_to_entity
@@ -93,11 +100,7 @@ impl Compiler {
 
     fn generate_position_sets(
         pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
-    ) -> (
-        HashSet<Position<i32>>,
-        HashSet<Position<i32>>,
-        HashSet<Position<i32>>,
-    ) {
+    ) -> PostionSets {
         let positions = pos_to_entity.keys().cloned().collect::<HashSet<_>>();
 
         let belt_positions = pos_to_entity
@@ -108,7 +111,11 @@ impl Compiler {
             })
             .collect();
         let inserter_positions = positions.difference(&belt_positions).cloned().collect();
-        (positions, belt_positions, inserter_positions)
+        PostionSets {
+            positions,
+            belt_positions,
+            inserter_positions,
+        }
     }
 
     /// Creates a relation of positions that feed other positions
@@ -156,9 +163,7 @@ impl Compiler {
             let dir = base.direction;
             let pos = base.position;
             match **e {
-                Entity::Belt(_) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                }
+                Entity::Belt(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
                 Entity::Underground(u) if u.belt_type == BeltType::Input => {
                     if let Some(output_pos) =
                         find_underground_output(&u, output_undergrounds.clone())
@@ -166,14 +171,9 @@ impl Compiler {
                         feeds_to.add(&pos, output_pos);
                     }
                 }
-                Entity::Underground(_) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                }
-                Entity::Splitter(s) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                    let phantom = s.get_phantom();
-                    add_feeds_to(&mut feeds_to, pos_to_entity, phantom, dir);
-                }
+                Entity::Underground(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::Splitter(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::SplitterPhantom(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
                 Entity::Inserter(l) => {
                     let source = l.get_source();
                     let destination = l.get_destination();
@@ -218,8 +218,11 @@ impl Compiler {
         let entities: Vec<_> = entities.into_iter().map(Rc::new).collect();
         let pos_to_entity = Self::generate_pos_to_entity(&entities);
 
-        let (positions, belt_positions, inserter_positions) =
-            Self::generate_position_sets(&pos_to_entity);
+        let PostionSets {
+            positions,
+            belt_positions,
+            inserter_positions,
+        } = Self::generate_position_sets(&pos_to_entity);
         let feeds_to = Self::populate_feeds_to(&pos_to_entity, &entities);
         let feeds_from = Self::populate_feeds_from(&pos_to_entity, &entities);
 
@@ -260,7 +263,7 @@ impl Compiler {
                 let pos = base.position;
                 let dir = base.direction;
 
-                let phantom = s.get_phantom();
+                let phantom = s.get_phantom().base.position;
                 feeds_to.add(&phantom, pos.shift(dir, 1));
                 feeds_to.add(&pos, phantom.shift(dir, 1));
             }
@@ -353,7 +356,7 @@ where
     let dir = base.direction;
     let throughput = base.throughput;
     let max_distance = 3 + 2 * throughput as i32 / 15;
-    /* online matching underground belt tiers can be connected */
+    /* only matching underground belt tiers can be connected */
     let outputs = outputs.filter(|u| u.get_base().throughput == throughput);
     /* XXX: runs in O(8n), with n = #outputs
      * can be improved to O(n) */
@@ -361,7 +364,9 @@ where
         let possible_output_pos = pos.shift(dir, dist);
         for candidate in outputs.clone() {
             let candidate_base = candidate.get_base();
-            if possible_output_pos == candidate_base.position {
+            let same_position = possible_output_pos == candidate_base.position;
+            let same_direction = dir == candidate_base.direction;
+            if same_position && same_direction {
                 return Some(candidate_base.position);
             }
         }

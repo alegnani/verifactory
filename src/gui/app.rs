@@ -1,6 +1,6 @@
 use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
+    collections::{HashMap, HashSet},
+    path::PathBuf,
 };
 
 use egui_file::FileDialog;
@@ -8,11 +8,11 @@ use z3::SatResult;
 
 use crate::{
     backends::{Z3Backend, Z3Proofs},
-    compiler::Compiler,
+    compiler::{Compiler, RelMap},
     entities::{Entity, EntityId},
     import::string_to_entities,
-    ir::{FlowGraph, FlowGraphFun, Node},
-    utils::load_entities,
+    ir::{FlowGraph, FlowGraphFun, Node, Reversable},
+    utils::Position,
 };
 
 use super::menu::BlueprintString;
@@ -31,7 +31,7 @@ pub struct GridSettings {
 }
 
 impl GridSettings {
-    pub fn from(grid: &Vec<Vec<Option<Entity<i32>>>>) -> Self {
+    pub fn from(grid: &EntityGrid) -> Self {
         Self {
             max_y: grid.len() as i32 + 1,
             y_offset: 0,
@@ -74,10 +74,12 @@ impl IOState {
 #[derive(Default)]
 pub struct ProofState {
     balancer: Option<SatResult>,
+    equal_drain: Option<SatResult>,
 }
 
+pub type EntityGrid = Vec<Vec<Option<Entity<i32>>>>;
 pub struct MyApp {
-    pub grid: Vec<Vec<Option<Entity<i32>>>>,
+    pub grid: EntityGrid,
     pub grid_settings: GridSettings,
     pub io_state: IOState,
     pub open_file_state: FileState,
@@ -85,6 +87,8 @@ pub struct MyApp {
     pub graph: FlowGraph,
     pub selection: Option<Entity<i32>>,
     pub blueprint_string: BlueprintString,
+    pub feeds_from: RelMap<Position<i32>>,
+    pub show_error: bool,
 }
 
 impl Default for MyApp {
@@ -97,6 +101,8 @@ impl Default for MyApp {
         let graph = FlowGraph::default();
         let selection = None;
         let blueprint_string = BlueprintString::default();
+        let feeds_from = HashMap::new();
+        let show_error = false;
         Self {
             grid,
             grid_settings,
@@ -106,12 +112,14 @@ impl Default for MyApp {
             graph,
             selection,
             blueprint_string,
+            feeds_from,
+            show_error,
         }
     }
 }
 
 impl MyApp {
-    fn generate_z3(&self) -> Z3Backend {
+    fn generate_z3(&self, reversed: bool) -> Z3Backend {
         let mut graph = self.graph.clone();
         let io_state = &self.io_state;
         let removed_inputs = io_state
@@ -129,25 +137,32 @@ impl MyApp {
         println!("Remove list: {:?}", removed);
 
         graph.simplify(&removed);
+        let graph = if reversed {
+            Reversable::reverse(&graph)
+        } else {
+            graph
+        };
         Z3Backend::new(graph)
     }
 
-    pub fn load_file(&mut self, file: PathBuf) {
-        self.open_file_state.opened_file = Some(file.clone());
-        let blueprint_string = std::fs::read_to_string(file).unwrap();
-        self.load_string(&blueprint_string);
+    pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
+        let blueprint_string = std::fs::read_to_string(file.clone())?;
+        self.open_file_state.opened_file = Some(file);
+        self.load_string(&blueprint_string)
     }
 
-    pub fn load_string(&mut self, blueprint: &str) {
-        let loaded_entities = string_to_entities(blueprint).unwrap();
+    pub fn load_string(&mut self, blueprint: &str) -> anyhow::Result<()> {
+        let loaded_entities = string_to_entities(blueprint)?;
         self.grid = Self::entities_to_grid(loaded_entities.clone());
         self.grid_settings = GridSettings::from(&self.grid);
 
-        self.graph = Compiler::new(loaded_entities).create_graph();
+        let compiler = Compiler::new(loaded_entities);
+        self.feeds_from = compiler.feeds_from.clone();
+        self.graph = compiler.create_graph();
         self.graph.simplify(&[]);
-        self.graph.to_svg("main.svg");
         self.io_state = IOState::from_graph(&self.graph);
         self.proof_state = ProofState::default();
+        Ok(())
     }
 }
 
@@ -203,19 +218,61 @@ impl eframe::App for MyApp {
             });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        if self.show_error {
+            egui::Window::new("Error").title_bar(false).show(ctx, |ui| {
+                ui.heading("Error whilst loading blueprint!");
+                ui.label("Blueprint string is either malformed or uses non supported entities.");
+                if ui.button("Close").clicked() {
+                    self.show_error = false;
+                }
+            });
+        }
+
+        egui::TopBottomPanel::top("proof_panel").show(ctx, |ui| {
             ui.heading("Proofs");
             ui.separator();
+
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3();
+                    let z3 = self.generate_z3(false);
                     self.proof_state.balancer = Some(z3.is_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
                     ui.label(format!("Proof result: {:?}", proof_res));
                 }
             });
+
+            ui.label("\n");
+
+            ui.heading("Is it an equal drain belt-balancer (assumes it is a belt-balancer)?");
+            ui.horizontal(|ui| {
+                if ui.button("Prove").clicked() {
+                    let z3 = self.generate_z3(true);
+                    self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
+                }
+                if let Some(proof_res) = self.proof_state.equal_drain {
+                    ui.label(format!("Proof result: {:?}", proof_res));
+                }
+            });
+            ui.label("\n");
+        });
+
+        /* Show features and current state of project */
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Current state of the project");
+            ui.label("- To work Factorio Verify needs z3 to be installed on your system.");
+            ui.label("- Currently only supports belts, underground belts and splitters (with priorities).\n  \
+            Side-loading and other constructs taking advantage of a belt being split into two lanes is currently WIP.\n  \
+            Read: The analysis will *definetely* be wrong.");
+            ui.label("- All belts show as yellow but they are still modelled correctly.\n  \
+            Clicking on a belt will show its real throughput (15 for yellow, 30 for red, 45 for blue.");
+            ui.label("- Don't load too big blueprints as they won't fit on the screen.\n  \
+            A zoomable and movable canvas is WIP.");
+            ui.label("- Factorio Verify can prove much more than the automatic proofs above.\n  \
+            A custom language to specify own properties is WIP.");
+            ui.label("\n  Thank you for testing Factorio Verify and have fun.\n  The factory must grow!");
+
         });
     }
 }

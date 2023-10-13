@@ -35,12 +35,7 @@ pub trait Z3Edge {
 }
 
 impl Z3Node for Node {
-    fn model<'a>(
-        &self,
-        idx: NodeIndex,
-        z3: &'a Z3Backend,
-        mut helper: Z3Helper<'a>,
-    ) -> Z3Helper<'a> {
+    fn model<'a>(&self, idx: NodeIndex, z3: &'a Z3Backend, helper: Z3Helper<'a>) -> Z3Helper<'a> {
         match self {
             Node::Connector(x) => x.model(idx, z3, helper),
             Node::Input(x) => x.model(idx, z3, helper),

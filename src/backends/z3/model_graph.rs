@@ -1,8 +1,8 @@
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::collections::HashMap;
 use z3::{
-    ast::{Ast, Int, Real},
-    Config, Context, SatResult, Solver,
+    ast::{Int, Real},
+    Config, Context, Solver,
 };
 
 use crate::ir::FlowGraph;
@@ -75,7 +75,6 @@ impl Z3Backend {
             let node = &self.graph[node_idx];
             helper = node.model(node_idx, self, helper);
         }
-        println!("Solver:\n{}", self.solver);
         helper
     }
 }

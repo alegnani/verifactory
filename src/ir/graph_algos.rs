@@ -4,11 +4,7 @@ use crate::{entities::EntityId, ir::Lattice};
 
 use super::{FlowGraph, GraphHelper, Node};
 use graphviz_rust::{cmd::Format, exec_dot};
-use petgraph::{
-    dot::Dot,
-    prelude::{EdgeIndex, NodeIndex},
-    Direction::{Incoming, Outgoing},
-};
+use petgraph::{dot::Dot, prelude::EdgeIndex, Direction::Outgoing};
 
 /// Indicates how much a graph is coalesced.
 /// Coalescing is performed on a Connector S, where A->S->B, with in_deg(S) = out_deg(S) = 1.
@@ -67,7 +63,6 @@ impl FlowGraphFun for FlowGraph {
                 continue;
             }
 
-            self.to_svg("debug.svg");
             if self.shrink_capacities() {
                 continue;
             }
@@ -195,7 +190,6 @@ impl FlowGraphHelper for FlowGraph {
                             self.shrink_capacity_splitter_no_prio(in_idx, out_idxs[0], out_idxs[1])
                         }
                         Some(priority) => {
-                            self.to_svg("tmp.svg").unwrap();
                             let prio_idx = self.get_edge(node_idx, Outgoing, priority);
                             let other_idx = self.get_edge(node_idx, Outgoing, priority.other());
                             self.shrink_capacity_splitter_prio(in_idx, prio_idx, other_idx)
@@ -309,6 +303,7 @@ impl ShrinkNodes for FlowGraph {
 
         let (new_out, new_a, new_b) = match in_cap.cmp(&out_cap) {
             Ordering::Equal => (out_cap, a_cap, b_cap),
+            /* FIXME: this is just an ugly fix */
             // Ordering::Less => (out_cap.min(a_cap + b_cap), a_cap, b_cap),
             Ordering::Less => (out_cap, a_cap, b_cap),
             Ordering::Greater => (out_cap, a_cap.min(out_cap), b_cap.min(out_cap)),
