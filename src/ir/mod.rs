@@ -3,6 +3,7 @@
 mod graph_algos;
 mod reverse;
 
+pub use self::reverse::Reversable;
 use std::fmt::Debug;
 
 use fraction::GenericFraction;

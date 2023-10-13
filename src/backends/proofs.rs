@@ -53,10 +53,10 @@ impl Z3Proofs for Z3Backend {
         ));
 
         let res = solver.check_assumptions(&[out_eq.not()]);
+        println!("{:?}", solver.get_model());
         res.not()
     }
 
-    /* FIXME: this does not work due to the way mergers are modelled */
     fn is_equal_drain_balancer(&self) -> SatResult {
         match self.is_balancer() {
             SatResult::Sat => {
@@ -68,9 +68,11 @@ impl Z3Proofs for Z3Backend {
                 let in_eq = self.equality(&inputs);
 
                 /* An equal drain balancer is a balancer s.t. the following holds:
-                 * (out1 = out2 = ...) -> (in1 = in2 = ...) */
+                 * (out1 = out2 = ...) -> (in1 = in2 = ...)
+                 * as we model the reasoning from output to input as a reversal of the IR graph
+                 * this implication changes to (in1 = in2 = ...) -> (out1 = out2 = ...). */
 
-                let implic = out_eq.implies(&in_eq);
+                let implic = in_eq.implies(&out_eq);
                 // Sanity check
                 assert!(matches!(
                     solver.check_assumptions(&[implic.clone()]),
@@ -78,6 +80,7 @@ impl Z3Proofs for Z3Backend {
                 ));
 
                 let res = solver.check_assumptions(&[implic.not()]);
+                println!("{:?}", solver.get_model());
                 res.not()
             }
             x => x,

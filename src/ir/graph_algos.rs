@@ -190,7 +190,6 @@ impl FlowGraphHelper for FlowGraph {
                             self.shrink_capacity_splitter_no_prio(in_idx, out_idxs[0], out_idxs[1])
                         }
                         Some(priority) => {
-                            self.to_svg("tmp.svg").unwrap();
                             let prio_idx = self.get_edge(node_idx, Outgoing, priority);
                             let other_idx = self.get_edge(node_idx, Outgoing, priority.other());
                             self.shrink_capacity_splitter_prio(in_idx, prio_idx, other_idx)

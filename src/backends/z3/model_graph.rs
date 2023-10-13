@@ -75,7 +75,6 @@ impl Z3Backend {
             let node = &self.graph[node_idx];
             helper = node.model(node_idx, self, helper);
         }
-        println!("Solver:\n{}", self.solver);
         helper
     }
 }

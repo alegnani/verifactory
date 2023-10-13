@@ -8,7 +8,7 @@ use crate::{
     compiler::Compiler,
     entities::{Entity, EntityId},
     import::string_to_entities,
-    ir::{FlowGraph, FlowGraphFun, Node},
+    ir::{FlowGraph, FlowGraphFun, Node, Reversable},
 };
 
 use super::menu::BlueprintString;
@@ -108,7 +108,7 @@ impl Default for MyApp {
 }
 
 impl MyApp {
-    fn generate_z3(&self) -> Z3Backend {
+    fn generate_z3(&self, reversed: bool) -> Z3Backend {
         let mut graph = self.graph.clone();
         let io_state = &self.io_state;
         let removed_inputs = io_state
@@ -126,6 +126,11 @@ impl MyApp {
         println!("Remove list: {:?}", removed);
 
         graph.simplify(&removed);
+        let graph = if reversed {
+            Reversable::reverse(&graph)
+        } else {
+            graph
+        };
         Z3Backend::new(graph)
     }
 
@@ -206,7 +211,7 @@ impl eframe::App for MyApp {
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3();
+                    let z3 = self.generate_z3(false);
                     self.proof_state.balancer = Some(z3.is_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
@@ -217,10 +222,10 @@ impl eframe::App for MyApp {
             ui.spacing();
             ui.spacing();
 
-            ui.heading("Is it an equal drain belt-balancer? **Currently broken**");
+            ui.heading("Is it an equal drain belt-balancer (assumes it is a belt-balancer)?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3();
+                    let z3 = self.generate_z3(true);
                     self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
