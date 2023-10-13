@@ -6,7 +6,10 @@ use std::{
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-use crate::{entities::Entity, import::string_to_entities};
+use crate::{
+    entities::{Entity, Priority},
+    import::string_to_entities,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub struct Position<T> {
@@ -48,6 +51,14 @@ impl Direction {
         };
         let new_u8 = (*self as u8 + amount * incr) % 8;
         new_u8.into()
+    }
+
+    pub fn rotate_side(&self, side: Priority) -> Self {
+        match side {
+            Priority::None => *self,
+            Priority::Left => self.rotate(Rotation::Anticlockwise, 1),
+            Priority::Right => self.rotate(Rotation::Clockwise, 1),
+        }
     }
 
     pub fn flip(&self) -> Self {

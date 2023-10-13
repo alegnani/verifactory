@@ -3,11 +3,56 @@ use std::f32::consts::PI;
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
-    entities::{BeltType, Entity},
+    entities::{BeltType, Entity, Priority, Splitter},
     utils::{Direction, Position},
 };
 
 use super::app::MyApp;
+
+trait ShrinkDirection {
+    fn shrink_dir(&self, side: Direction, amount: f32) -> Self;
+}
+
+impl ShrinkDirection for Rect {
+    fn shrink_dir(&self, side: Direction, amount: f32) -> Self {
+        let mut rect = *self;
+        match side {
+            Direction::North => rect.min += Vec2::new(0., amount),
+            Direction::East => rect.max += Vec2::new(-amount, 0.),
+            Direction::South => rect.max += Vec2::new(0., -amount),
+            Direction::West => rect.min += Vec2::new(amount, 0.),
+        }
+        rect
+    }
+}
+
+fn prio_rect(splitter: &Splitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
+    let dir = splitter.base.direction;
+    let mut vec = vec![];
+    match splitter.input_prio {
+        Priority::None => (),
+        x => {
+            let rot = splitter.base.direction.rotate_side(x);
+            let n_rect = rect
+                .shrink_dir(dir, size / 2.)
+                .shrink_dir(rot.flip(), 5. / 4. * size)
+                .shrink_dir(rot, size / 4.);
+            vec.push(n_rect);
+        }
+    }
+    match splitter.output_prio {
+        Priority::None => (),
+        x => {
+            let rot = splitter.base.direction.rotate_side(x);
+            let n_rect = rect
+                .shrink_dir(dir.flip(), size / 2.)
+                .shrink_dir(rot.flip(), 5. / 4. * size)
+                .shrink_dir(rot, size / 4.);
+            vec.push(n_rect);
+        }
+    }
+    vec
+}
 
 impl MyApp {
     pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> Vec<Vec<Option<Entity<i32>>>> {
@@ -53,7 +98,7 @@ impl MyApp {
         }
     }
 
-    fn draw_io(&self, ui: &mut egui::Ui, rect: Rect, entity: &Entity<i32>) {
+    fn draw_io(&self, ui: &mut egui::Ui, mut rect: Rect, entity: &Entity<i32>) {
         let base = entity.get_base();
         let id = base.id;
         let is_input = self.io_state.input_entities.contains(&id);
@@ -71,8 +116,32 @@ impl MyApp {
             .rotate(rotation, Vec2::splat(0.5))
             .tint(color)
             .fit_to_fraction(Vec2::splat(0.7));
+        /* if the entity is a splitter force the arrow to be drawn in the middle */
+        if let Entity::Splitter(s) = entity {
+            let size = self.grid_settings.size as f32;
+            let rot = s
+                .base
+                .direction
+                .rotate(crate::utils::Rotation::Clockwise, 1);
+            rect = rect
+                .shrink_dir(rot, size / 2.)
+                .shrink_dir(rot.flip(), size / 2.);
+        }
         // draw the arrow
         ui.put(rect, img);
+    }
+
+    fn draw_prio(&self, ui: &mut egui::Ui, rect: Rect, splitter: &Splitter<i32>) {
+        let base = splitter.base;
+        let rotation = base.direction as u8 as f32 * PI / 4.;
+        let color = Color32::YELLOW;
+        let img = Image::new(egui::include_image!("../../imgs/arrow.svg"))
+            .rotate(rotation, Vec2::splat(0.5))
+            .tint(color);
+        let size = self.grid_settings.size as f32;
+        for p_rect in prio_rect(splitter, rect, size) {
+            ui.put(p_rect, img.clone());
+        }
     }
 
     fn draw_selection(&self, ui: &mut egui::Ui, rect: Rect) {
@@ -145,6 +214,9 @@ impl MyApp {
         match self.selection {
             Some(sel) if sel.get_base().id == base.id => self.draw_selection(ui, pos_rect),
             _ => (),
+        }
+        if let Entity::Splitter(s) = entity {
+            self.draw_prio(ui, pos_rect, s);
         }
         self.draw_io(ui, pos_rect, entity);
         ret
