@@ -78,7 +78,19 @@ impl MyApp {
                 }
                 /* View submenu */
                 /* TODO */
-                ui.menu_button("View", |ui| {});
+                ui.menu_button("View", |ui| {
+                    let size = &mut self.grid_settings.size;
+                    ui.label(format!("Current size: {}", size));
+                    if ui.button("Increase blueprint size").clicked() {
+                        *size += 5;
+                    }
+                    if ui.button("Decrease blueprint size").clicked() {
+                        *size -= 5;
+                        if *size <= 0 {
+                            *size = 5;
+                        }
+                    }
+                });
             })
         });
     }

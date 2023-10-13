@@ -14,6 +14,20 @@ trait Negatable {
     fn not(self) -> Self;
 }
 
+pub trait Printable {
+    fn to_str(&self) -> &'static str;
+}
+
+impl Printable for SatResult {
+    fn to_str(&self) -> &'static str {
+        match self {
+            Self::Sat => "Yes",
+            Self::Unsat => "No",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
 impl Negatable for SatResult {
     fn not(self) -> Self {
         match self {
