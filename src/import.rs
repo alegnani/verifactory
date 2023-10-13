@@ -139,7 +139,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
             };
             Ok(Self::Assembler(Assembler { base }))
         } else {
-            panic!();
+            Err(format!("Invalid entity: ({})", name)).map_err(serde::de::Error::custom)
         }
     }
 }
@@ -225,8 +225,8 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<Entity<i32>>> {
     let json = decompress_string(blueprint_string)?;
     let mut entities: Vec<_> = get_json_entities(json)?
         .into_iter()
-        .map(serde_json::from_value)
-        .collect::<Result<Vec<_>, _>>()?;
+        .flat_map(serde_json::from_value)
+        .collect::<Vec<_>>();
 
     snap_to_grid(&mut entities);
     let mut entities = normalize_entities(&entities);

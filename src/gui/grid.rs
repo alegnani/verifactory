@@ -1,4 +1,4 @@
-use std::{collections::HashSet, f32::consts::PI};
+use std::f32::consts::PI;
 
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
@@ -231,7 +231,6 @@ impl MyApp {
         let mut pos_rect = self.get_grid_rect(base.position);
         let mut rotation = None;
         match entity {
-            Entity::SplitterPhantom(_) => return None,
             Entity::Splitter(_) => {
                 let size = s.size as f32;
                 pos_rect.min += match base.direction {
@@ -246,7 +245,8 @@ impl MyApp {
                 };
             }
             Entity::Belt(b) => rotation = determine_belt_rotation(b, &self.feeds_from, &self.grid),
-            _ => (),
+            Entity::Underground(_) => (),
+            _ => return None,
         }
         let img = Self::get_entity_img(entity, rotation);
 

@@ -27,11 +27,13 @@ impl BlueprintString {
 
 impl MyApp {
     pub fn draw_menu(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("").show(ctx, |ui| {
+        egui::TopBottomPanel::top("TOP").show(ctx, |ui| {
             self.blueprint_string.show(ui);
             if self.blueprint_string.should_load {
                 let blueprint = self.blueprint_string.blueprint.clone();
-                self.load_string(&blueprint);
+                if self.load_string(&blueprint).is_err() {
+                    self.show_error = true;
+                }
                 self.blueprint_string.should_load = false;
                 self.blueprint_string.open = false;
             }
@@ -70,7 +72,9 @@ impl MyApp {
                     }
                 });
                 if let Some(path) = path {
-                    self.load_file(path);
+                    if self.load_file(path).is_err() {
+                        self.show_error = true;
+                    }
                 }
                 /* View submenu */
                 /* TODO */

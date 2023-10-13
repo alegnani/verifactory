@@ -172,8 +172,8 @@ impl Compiler {
                     }
                 }
                 Entity::Underground(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::Splitter(s) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::SplitterPhantom(p) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::Splitter(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::SplitterPhantom(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
                 Entity::Inserter(l) => {
                     let source = l.get_source();
                     let destination = l.get_destination();
