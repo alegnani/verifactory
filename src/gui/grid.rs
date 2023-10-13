@@ -1,13 +1,14 @@
-use std::f32::consts::PI;
+use std::{collections::HashSet, f32::consts::PI};
 
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
-    entities::{BeltType, Entity, Priority, Splitter},
-    utils::{Direction, Position},
+    compiler::RelMap,
+    entities::{Belt, BeltType, Entity, Priority, Splitter},
+    utils::{Direction, Position, Rotation},
 };
 
-use super::app::MyApp;
+use super::app::{EntityGrid, MyApp};
 
 trait ShrinkDirection {
     fn shrink_dir(&self, side: Direction, amount: f32) -> Self;
@@ -54,8 +55,39 @@ fn prio_rect(splitter: &Splitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
     vec
 }
 
+fn determine_belt_rotation(
+    belt: &Belt<i32>,
+    feeds_from_map: &RelMap<Position<i32>>,
+    grid: &EntityGrid,
+) -> Option<Rotation> {
+    let feeds_from = feeds_from_map.get(&belt.base.position);
+    feeds_from.and_then(|f| {
+        if f.len() != 1 {
+            None
+        } else {
+            let pos = f.iter().next().unwrap();
+            /* TODO: this is very inefficient, maybe keep a HashMap<Position<i32>, Entity<i32>> in MyApp */
+            let feeding_entity = grid
+                .iter()
+                .flatten()
+                .flatten()
+                .find(|&e| e.get_base().position == *pos)
+                .unwrap();
+            let feeding_dir = feeding_entity.get_base().direction;
+            let belt_dir = belt.base.direction;
+            if belt_dir == feeding_dir.rotate(Rotation::Anticlockwise, 1) {
+                Some(Rotation::Anticlockwise)
+            } else if belt_dir == feeding_dir.rotate(Rotation::Clockwise, 1) {
+                Some(Rotation::Clockwise)
+            } else {
+                None
+            }
+        }
+    })
+}
+
 impl MyApp {
-    pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> Vec<Vec<Option<Entity<i32>>>> {
+    pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> EntityGrid {
         let (max_x, max_y) = entities
             .iter()
             .map(|e| {
@@ -151,7 +183,7 @@ impl MyApp {
         ui.put(rect, img);
     }
 
-    fn get_entity_img(entity: &Entity<i32>) -> Image {
+    fn get_entity_img(entity: &Entity<i32>, belt_rotation: Option<Rotation>) -> Image {
         let base = entity.get_base();
         let rotation = base.direction as u8 as f32 * PI / 4.;
         match entity {
@@ -176,9 +208,15 @@ impl MyApp {
                 Entity::Underground(_) => Image::new(egui::include_image!(
                     "../../imgs/yellow_underground_output.png"
                 )),
-                Entity::Belt(_) => {
-                    Image::new(egui::include_image!("../../imgs/yellow_belt_straight.png"))
-                }
+                Entity::Belt(_) => match belt_rotation {
+                    None => Image::new(egui::include_image!("../../imgs/yellow_belt_straight.png")),
+                    Some(Rotation::Anticlockwise) => {
+                        Image::new(egui::include_image!("../../imgs/yellow_belt_anticlock.png"))
+                    }
+                    Some(Rotation::Clockwise) => {
+                        Image::new(egui::include_image!("../../imgs/yellow_belt_clock.png"))
+                    }
+                },
                 _ => panic!(),
             }
             .rotate(rotation, Vec2::splat(0.5)),
@@ -191,20 +229,26 @@ impl MyApp {
         let base = entity.get_base();
 
         let mut pos_rect = self.get_grid_rect(base.position);
-        let img = Self::get_entity_img(entity);
-        if let Entity::Splitter(_) = entity {
-            let size = s.size as f32;
-            pos_rect.min += match base.direction {
-                Direction::North => Vec2 { x: -size, y: 0. },
-                Direction::East => Vec2 { x: 0., y: -size },
-                _ => Vec2 { x: 0., y: 0. },
-            };
-            pos_rect.max += match base.direction {
-                Direction::South => Vec2 { x: size, y: 0. },
-                Direction::West => Vec2 { x: 0., y: size },
-                _ => Vec2 { x: 0., y: 0. },
-            };
+        let mut rotation = None;
+        match entity {
+            Entity::SplitterPhantom(_) => return None,
+            Entity::Splitter(_) => {
+                let size = s.size as f32;
+                pos_rect.min += match base.direction {
+                    Direction::North => Vec2 { x: -size, y: 0. },
+                    Direction::East => Vec2 { x: 0., y: -size },
+                    _ => Vec2 { x: 0., y: 0. },
+                };
+                pos_rect.max += match base.direction {
+                    Direction::South => Vec2 { x: size, y: 0. },
+                    Direction::West => Vec2 { x: 0., y: size },
+                    _ => Vec2 { x: 0., y: 0. },
+                };
+            }
+            Entity::Belt(b) => rotation = determine_belt_rotation(b, &self.feeds_from, &self.grid),
+            _ => (),
         }
+        let img = Self::get_entity_img(entity, rotation);
 
         let ret = if ui.put(pos_rect, img).clicked() {
             Some(*entity)

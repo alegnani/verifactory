@@ -1,14 +1,18 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use egui_file::FileDialog;
 use z3::SatResult;
 
 use crate::{
     backends::{Z3Backend, Z3Proofs},
-    compiler::Compiler,
+    compiler::{Compiler, RelMap},
     entities::{Entity, EntityId},
     import::string_to_entities,
     ir::{FlowGraph, FlowGraphFun, Node, Reversable},
+    utils::Position,
 };
 
 use super::menu::BlueprintString;
@@ -27,7 +31,7 @@ pub struct GridSettings {
 }
 
 impl GridSettings {
-    pub fn from(grid: &Vec<Vec<Option<Entity<i32>>>>) -> Self {
+    pub fn from(grid: &EntityGrid) -> Self {
         Self {
             max_y: grid.len() as i32 + 1,
             y_offset: 0,
@@ -73,8 +77,9 @@ pub struct ProofState {
     equal_drain: Option<SatResult>,
 }
 
+pub type EntityGrid = Vec<Vec<Option<Entity<i32>>>>;
 pub struct MyApp {
-    pub grid: Vec<Vec<Option<Entity<i32>>>>,
+    pub grid: EntityGrid,
     pub grid_settings: GridSettings,
     pub io_state: IOState,
     pub open_file_state: FileState,
@@ -82,6 +87,7 @@ pub struct MyApp {
     pub graph: FlowGraph,
     pub selection: Option<Entity<i32>>,
     pub blueprint_string: BlueprintString,
+    pub feeds_from: RelMap<Position<i32>>,
 }
 
 impl Default for MyApp {
@@ -94,6 +100,7 @@ impl Default for MyApp {
         let graph = FlowGraph::default();
         let selection = None;
         let blueprint_string = BlueprintString::default();
+        let feeds_from = HashMap::new();
         Self {
             grid,
             grid_settings,
@@ -103,6 +110,7 @@ impl Default for MyApp {
             graph,
             selection,
             blueprint_string,
+            feeds_from,
         }
     }
 }
@@ -145,7 +153,9 @@ impl MyApp {
         self.grid = Self::entities_to_grid(loaded_entities.clone());
         self.grid_settings = GridSettings::from(&self.grid);
 
-        self.graph = Compiler::new(loaded_entities).create_graph();
+        let compiler = Compiler::new(loaded_entities);
+        self.feeds_from = compiler.feeds_from.clone();
+        self.graph = compiler.create_graph();
         self.graph.simplify(&[]);
         self.io_state = IOState::from_graph(&self.graph);
         self.proof_state = ProofState::default();

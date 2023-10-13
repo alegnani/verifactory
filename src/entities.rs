@@ -32,6 +32,7 @@ pub enum Entity<T> {
     Belt(Belt<T>),
     Underground(Underground<T>),
     Splitter(Splitter<T>),
+    SplitterPhantom(SplitterPhantom<T>),
     Inserter(Inserter<T>),
     LongInserter(LongInserter<T>),
     Assembler(Assembler<T>),
@@ -43,6 +44,7 @@ impl<T> Entity<T> {
             Self::Belt(b) => &b.base,
             Self::Underground(b) => &b.base,
             Self::Splitter(b) => &b.base,
+            Self::SplitterPhantom(b) => &b.base,
             Self::Inserter(b) => &b.base,
             Self::LongInserter(b) => &b.base,
             Self::Assembler(b) => &b.base,
@@ -84,11 +86,17 @@ pub struct Splitter<T> {
 }
 
 impl Splitter<i32> {
-    pub fn get_phantom(&self) -> Position<i32> {
-        let base = self.base;
+    pub fn get_phantom(&self) -> SplitterPhantom<i32> {
+        let mut base = self.base;
         let rotation = base.direction.rotate(Rotation::Anticlockwise, 1);
-        base.position.shift(rotation, 1)
+        base.position = base.position.shift(rotation, 1);
+        SplitterPhantom { base }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SplitterPhantom<T> {
+    pub base: BaseEntity<T>,
 }
 
 #[derive(Debug, Clone, Copy)]

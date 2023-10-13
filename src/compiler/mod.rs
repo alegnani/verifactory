@@ -60,7 +60,7 @@ where
     }
 }
 
-type RelMap<T> = HashMap<T, HashSet<T>>;
+pub type RelMap<T> = HashMap<T, HashSet<T>>;
 
 /* XXX: do we really need the entities vector?
  * => remove Rc, get entities with pos_to_entity.values() */
@@ -70,7 +70,7 @@ pub struct Compiler {
     belt_positions: HashSet<Position<i32>>,
     inserter_positions: HashSet<Position<i32>>,
     feeds_to: RelMap<Position<i32>>,
-    feeds_from: RelMap<Position<i32>>,
+    pub feeds_from: RelMap<Position<i32>>,
     pos_to_entity: HashMap<Position<i32>, Rc<Entity<i32>>>,
 }
 
@@ -86,12 +86,13 @@ impl Compiler {
     ) -> HashMap<Position<i32>, Rc<Entity<i32>>> {
         let mut pos_to_entity = entities
             .iter()
+            .filter(|&e| !matches!(**e, Entity::SplitterPhantom(_)))
             .map(|e| (e.get_base().position, e.clone()))
             .collect::<HashMap<_, _>>();
 
         for e in entities {
             if let Entity::Splitter(s) = **e {
-                pos_to_entity.insert(s.get_phantom(), e.clone());
+                pos_to_entity.insert(s.get_phantom().base.position, e.clone());
             }
         }
         pos_to_entity
@@ -162,9 +163,7 @@ impl Compiler {
             let dir = base.direction;
             let pos = base.position;
             match **e {
-                Entity::Belt(_) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                }
+                Entity::Belt(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
                 Entity::Underground(u) if u.belt_type == BeltType::Input => {
                     if let Some(output_pos) =
                         find_underground_output(&u, output_undergrounds.clone())
@@ -172,14 +171,9 @@ impl Compiler {
                         feeds_to.add(&pos, output_pos);
                     }
                 }
-                Entity::Underground(_) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                }
-                Entity::Splitter(s) => {
-                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir);
-                    let phantom = s.get_phantom();
-                    add_feeds_to(&mut feeds_to, pos_to_entity, phantom, dir);
-                }
+                Entity::Underground(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::Splitter(s) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                Entity::SplitterPhantom(p) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
                 Entity::Inserter(l) => {
                     let source = l.get_source();
                     let destination = l.get_destination();
@@ -269,7 +263,7 @@ impl Compiler {
                 let pos = base.position;
                 let dir = base.direction;
 
-                let phantom = s.get_phantom();
+                let phantom = s.get_phantom().base.position;
                 feeds_to.add(&phantom, pos.shift(dir, 1));
                 feeds_to.add(&pos, phantom.shift(dir, 1));
             }

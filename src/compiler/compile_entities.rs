@@ -97,7 +97,7 @@ impl AddToGraph for Splitter<i32> {
 
         /* add the nodes to the connector map */
         let pos_r = self.base.position;
-        let pos_l = self.get_phantom();
+        let pos_l = self.get_phantom().base.position;
         pos_to_connector.insert(pos_r, (in_r_idx, out_r_idx));
         pos_to_connector.insert(pos_l, (in_l_idx, out_l_idx));
 
