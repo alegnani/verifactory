@@ -8,9 +8,10 @@ use super::Z3Backend;
 pub trait Z3Proofs {
     fn is_balancer(&self) -> SatResult;
     fn is_equal_drain_balancer(&self) -> SatResult;
+    fn get_counter_example(&self);
 }
 
-trait Negatable {
+pub trait Negatable {
     fn not(self) -> Self;
 }
 
@@ -67,7 +68,6 @@ impl Z3Proofs for Z3Backend {
         ));
 
         let res = solver.check_assumptions(&[out_eq.not()]);
-        println!("{:?}", solver.get_model());
         res.not()
     }
 
@@ -94,11 +94,23 @@ impl Z3Proofs for Z3Backend {
                 ));
 
                 let res = solver.check_assumptions(&[implic.not()]);
-                println!("{:?}", solver.get_model());
                 res.not()
             }
             x => x,
         }
+    }
+
+    fn get_counter_example(&self) {
+        match self.get_solver().get_model() {
+            None => None,
+            Some(model) => {
+                // let ast = z3::ast::Ast::Int::new_const(self.get_ctx(), "input4_1");
+                // let inter = model.get_const_interp(&ast);
+                // println!("{:?}", inter);
+                Some(())
+            }
+        };
+        todo!()
     }
 }
 

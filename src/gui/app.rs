@@ -4,10 +4,12 @@ use std::{
 };
 
 use egui_file::FileDialog;
-use z3::SatResult;
+use z3::{Config, Context, SatResult};
 
 use crate::{
-    backends::{Printable, Z3Backend, Z3Proofs},
+    backends::{
+        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, Printable, Z3Backend,
+    },
     compiler::{Compiler, RelMap},
     entities::{Entity, EntityId},
     import::string_to_entities,
@@ -75,6 +77,7 @@ impl IOState {
 pub struct ProofState {
     balancer: Option<SatResult>,
     equal_drain: Option<SatResult>,
+    throughput_unlimited: Option<SatResult>,
 }
 
 pub type EntityGrid = Vec<Vec<Option<Entity<i32>>>>;
@@ -119,7 +122,7 @@ impl Default for MyApp {
 }
 
 impl MyApp {
-    fn generate_z3(&self, reversed: bool) -> Z3Backend {
+    fn generate_graph(&self, reversed: bool) -> FlowGraph {
         let mut graph = self.graph.clone();
         let io_state = &self.io_state;
         let removed_inputs = io_state
@@ -142,7 +145,11 @@ impl MyApp {
         } else {
             graph
         };
-        Z3Backend::new(graph)
+        graph.to_svg("debug.svg").unwrap();
+        graph
+    }
+    fn generate_z3(&self, reversed: bool) -> Z3Backend {
+        Z3Backend::new(self.generate_graph(reversed))
     }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
@@ -235,8 +242,11 @@ impl eframe::App for MyApp {
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3(false);
-                    self.proof_state.balancer = Some(z3.is_balancer());
+                    let graph = self.generate_graph(false);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let res = model_f(&graph, &ctx, belt_balancer_f);
+                    self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
@@ -248,10 +258,32 @@ impl eframe::App for MyApp {
             ui.heading("Is it an equal drain belt-balancer (assumes it is a belt-balancer)?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3(true);
-                    self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
+                    let graph = self.generate_graph(true);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let res = model_f(&graph, &ctx, equal_drain_f);
+                    self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
+                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                }
+            });
+
+            ui.label("\n");
+
+            ui.heading(
+                "Is it a throughput unlimited belt-balancer (assumes it is a belt-balancer)?",
+            );
+            ui.horizontal(|ui| {
+                if ui.button("Prove").clicked() {
+                    let graph = self.generate_graph(false);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let entities = self.grid.iter().flatten().flatten().cloned().collect();
+                    let res = model_f(&graph, &ctx, throughput_unlimited(entities));
+                    self.proof_state.throughput_unlimited = Some(res);
+                }
+                if let Some(proof_res) = self.proof_state.throughput_unlimited {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
