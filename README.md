@@ -1,5 +1,5 @@
 # Factorio Verify
-![Factorio Verify interface](teaser.png)
+![](teaser.png)
 
 Factorio Verify is a verifier for Factorio blueprints, enabling you to automatically check logical properties on a blueprint.
 Currently this is limited to checking whether or not a belt-balancer works and if the inputs get all drained the same, leading to no imbalances.
