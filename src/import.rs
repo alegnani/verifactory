@@ -1,3 +1,5 @@
+//! Utility functions to load Factorio blueprint strings
+
 use anyhow::{anyhow, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;

@@ -1,3 +1,5 @@
+//! Front-end used to convert a Factorio blueprint to the IR
+
 mod compile_entities;
 
 use petgraph::Direction::{Incoming, Outgoing};
@@ -244,7 +246,7 @@ impl Compiler {
     /// Creates a relation of positions that feed other positions
     ///
     /// Usable to peform reachability analysis.
-    /// ```
+    /// ```text
     ///        __
     ///       |  \
     /// A ->  |   ⟩ -> C

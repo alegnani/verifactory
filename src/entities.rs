@@ -1,5 +1,6 @@
-use std::ops::{Add, Sub};
+//! Definition of entities that are part of a Factorio blueprint
 
+use std::ops::{Add, Sub};
 use crate::utils::{Direction, Position, Rotation};
 use serde::Deserialize;
 

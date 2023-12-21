@@ -1,4 +1,4 @@
-//! The intermediate representaton used for the conversion between a factorio blue
+//! The graph-based intermediate representation used for the conversion from a Factorio blueprint to a z3 model
 
 mod graph_algos;
 mod reverse;
@@ -31,13 +31,13 @@ use crate::entities::{EntityId, Priority};
 ///
 /// ## Belt side junction
 ///
-/// ```
+/// ```text
 /// ⇉⇉⇉⇉⇉⇉
 ///    ⇈
 ///    ⇈
 ///    ⇈
 ///    
-/// ```
+/// ```text
 ///
 /// A vertical belt joins an horizontal one from the side. The two sides
 /// of the vertical one are merged, with priority given to the left one.
