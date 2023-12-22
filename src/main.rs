@@ -1,4 +1,10 @@
-#![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
+#![doc = include_str!("../README.md")]
+//!
+//! ## Design Document
+//!
+//! More information about how the project is structured can be found under this [link](design_doc/design_doc.html).
+//! This includes the design document specifying how the underlying conversion from Factorio blueprints to the z3 model works.
+
 pub mod backends;
 pub mod compiler;
 pub mod entities;
