@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
 use crate::{
-    entities::{Entity, Priority},
+    entities::{FBEntity, Priority},
     import::string_to_entities,
 };
 
@@ -31,6 +31,20 @@ where
             Direction::West => (x - distance, y),
         };
         Self { x, y }
+    }
+}
+
+impl<T> std::ops::Add for Position<T>
+where
+    T: Add<Output = T>,
+{
+    type Output = Position<T>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::Output {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
     }
 }
 
@@ -108,7 +122,7 @@ mod test {
     }
 }
 
-pub fn load_entities(file: &str) -> Vec<Entity<i32>> {
+pub fn load_entities(file: &str) -> Vec<FBEntity<i32>> {
     let blueprint_string = fs::read_to_string(file).unwrap();
     string_to_entities(&blueprint_string).unwrap()
 }

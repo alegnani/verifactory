@@ -4,7 +4,7 @@ use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
     compiler::RelMap,
-    entities::{Belt, BeltType, Entity, Priority, Splitter},
+    entities::{BeltType, FBBelt, FBEntity, FBSplitter, Priority},
     utils::{Direction, Position, Rotation},
 };
 
@@ -27,7 +27,7 @@ impl ShrinkDirection for Rect {
     }
 }
 
-fn prio_rect(splitter: &Splitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
+fn prio_rect(splitter: &FBSplitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
     let dir = splitter.base.direction;
     let mut vec = vec![];
     match splitter.input_prio {
@@ -56,7 +56,7 @@ fn prio_rect(splitter: &Splitter<i32>, rect: Rect, size: f32) -> Vec<Rect> {
 }
 
 fn determine_belt_rotation(
-    belt: &Belt<i32>,
+    belt: &FBBelt<i32>,
     feeds_from_map: &RelMap<Position<i32>>,
     grid: &EntityGrid,
 ) -> Option<Rotation> {
@@ -87,7 +87,7 @@ fn determine_belt_rotation(
 }
 
 impl MyApp {
-    pub fn entities_to_grid(entities: Vec<Entity<i32>>) -> EntityGrid {
+    pub fn entities_to_grid(entities: Vec<FBEntity<i32>>) -> EntityGrid {
         let (max_x, max_y) = entities
             .iter()
             .map(|e| {
@@ -130,7 +130,7 @@ impl MyApp {
         }
     }
 
-    fn draw_io(&self, ui: &mut egui::Ui, mut rect: Rect, entity: &Entity<i32>) {
+    fn draw_io(&self, ui: &mut egui::Ui, mut rect: Rect, entity: &FBEntity<i32>) {
         let base = entity.get_base();
         let id = base.id;
         let is_input = self.io_state.input_entities.contains(&id);
@@ -149,7 +149,7 @@ impl MyApp {
             .tint(color)
             .fit_to_fraction(Vec2::splat(0.7));
         /* if the entity is a splitter force the arrow to be drawn in the middle */
-        if let Entity::Splitter(s) = entity {
+        if let FBEntity::Splitter(s) = entity {
             let size = self.grid_settings.size as f32;
             let rot = s
                 .base
@@ -163,7 +163,7 @@ impl MyApp {
         ui.put(rect, img);
     }
 
-    fn draw_prio(&self, ui: &mut egui::Ui, rect: Rect, splitter: &Splitter<i32>) {
+    fn draw_prio(&self, ui: &mut egui::Ui, rect: Rect, splitter: &FBSplitter<i32>) {
         let base = splitter.base;
         let rotation = base.direction as u8 as f32 * PI / 4.;
         let color = Color32::YELLOW;
@@ -183,11 +183,11 @@ impl MyApp {
         ui.put(rect, img);
     }
 
-    fn get_entity_img(entity: &Entity<i32>, belt_rotation: Option<Rotation>) -> Image {
+    fn get_entity_img(entity: &FBEntity<i32>, belt_rotation: Option<Rotation>) -> Image {
         let base = entity.get_base();
         let rotation = base.direction as u8 as f32 * PI / 4.;
         match entity {
-            Entity::Splitter(_) => match base.direction {
+            FBEntity::Splitter(_) => match base.direction {
                 Direction::North => {
                     Image::new(egui::include_image!("../../imgs/yellow_splitter_0.png"))
                 }
@@ -202,13 +202,13 @@ impl MyApp {
                 }
             },
             x => match x {
-                Entity::Underground(u) if u.belt_type == BeltType::Input => Image::new(
+                FBEntity::Underground(u) if u.belt_type == BeltType::Input => Image::new(
                     egui::include_image!("../../imgs/yellow_underground_input.png"),
                 ),
-                Entity::Underground(_) => Image::new(egui::include_image!(
+                FBEntity::Underground(_) => Image::new(egui::include_image!(
                     "../../imgs/yellow_underground_output.png"
                 )),
-                Entity::Belt(_) => match belt_rotation {
+                FBEntity::Belt(_) => match belt_rotation {
                     None => Image::new(egui::include_image!("../../imgs/yellow_belt_straight.png")),
                     Some(Rotation::Anticlockwise) => {
                         Image::new(egui::include_image!("../../imgs/yellow_belt_anticlock.png"))
@@ -224,14 +224,14 @@ impl MyApp {
         .sense(Sense::click())
     }
 
-    fn draw_img(&self, ui: &mut egui::Ui, entity: &Entity<i32>) -> Option<Entity<i32>> {
+    fn draw_img(&self, ui: &mut egui::Ui, entity: &FBEntity<i32>) -> Option<FBEntity<i32>> {
         let s = &self.grid_settings;
         let base = entity.get_base();
 
         let mut pos_rect = self.get_grid_rect(base.position);
         let mut rotation = None;
         match entity {
-            Entity::Splitter(_) => {
+            FBEntity::Splitter(_) => {
                 let size = s.size as f32;
                 pos_rect.min += match base.direction {
                     Direction::North => Vec2 { x: -size, y: 0. },
@@ -244,8 +244,10 @@ impl MyApp {
                     _ => Vec2 { x: 0., y: 0. },
                 };
             }
-            Entity::Belt(b) => rotation = determine_belt_rotation(b, &self.feeds_from, &self.grid),
-            Entity::Underground(_) => (),
+            FBEntity::Belt(b) => {
+                rotation = determine_belt_rotation(b, &self.feeds_from, &self.grid)
+            }
+            FBEntity::Underground(_) => (),
             _ => return None,
         }
         let img = Self::get_entity_img(entity, rotation);
@@ -259,7 +261,7 @@ impl MyApp {
             Some(sel) if sel.get_base().id == base.id => self.draw_selection(ui, pos_rect),
             _ => (),
         }
-        if let Entity::Splitter(s) = entity {
+        if let FBEntity::Splitter(s) = entity {
             self.draw_prio(ui, pos_rect, s);
         }
         self.draw_io(ui, pos_rect, entity);

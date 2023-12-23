@@ -11,7 +11,7 @@ use crate::{
         belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, Printable, Z3Backend,
     },
     compiler::{Compiler, RelMap},
-    entities::{Entity, EntityId},
+    entities::{EntityId, FBEntity},
     import::string_to_entities,
     ir::{FlowGraph, FlowGraphFun, Node, Reversable},
     utils::Position,
@@ -80,7 +80,7 @@ pub struct ProofState {
     throughput_unlimited: Option<SatResult>,
 }
 
-pub type EntityGrid = Vec<Vec<Option<Entity<i32>>>>;
+pub type EntityGrid = Vec<Vec<Option<FBEntity<i32>>>>;
 pub struct MyApp {
     pub grid: EntityGrid,
     pub grid_settings: GridSettings,
@@ -88,7 +88,7 @@ pub struct MyApp {
     pub open_file_state: FileState,
     pub proof_state: ProofState,
     pub graph: FlowGraph,
-    pub selection: Option<Entity<i32>>,
+    pub selection: Option<FBEntity<i32>>,
     pub blueprint_string: BlueprintString,
     pub feeds_from: RelMap<Position<i32>>,
     pub show_error: bool,

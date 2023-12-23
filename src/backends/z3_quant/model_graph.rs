@@ -5,7 +5,7 @@ use z3::{
     Context, SatResult, Solver,
 };
 
-use crate::{backends::proofs::Negatable, entities::Entity, ir::FlowGraph};
+use crate::{backends::proofs::Negatable, entities::FBEntity, ir::FlowGraph};
 
 use super::model_entities::{Z3Edge, Z3Node};
 
@@ -157,7 +157,7 @@ pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 }
 
 pub fn throughput_unlimited<'a>(
-    entities: Vec<Entity<i32>>,
+    entities: Vec<FBEntity<i32>>,
 ) -> impl Fn(ProofPrimitives<'a>) -> Bool<'a> {
     let i = move |p: ProofPrimitives<'a>| {
         let zero = Int::from_i64(p.ctx, 0);

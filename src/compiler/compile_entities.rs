@@ -3,13 +3,13 @@ use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
 use crate::{
-    entities::{Belt, Entity, Splitter, Underground},
+    entities::{FBBelt, FBEntity, FBSplitter, FBUnderground},
     ir::{self, Connector, Edge, FlowGraph, Node, Side},
     utils::Position,
 };
 
 fn add_belt_to_graph(
-    belt: &Entity<i32>,
+    belt: &FBEntity<i32>,
     graph: &mut FlowGraph,
     pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
 ) {
@@ -44,27 +44,27 @@ pub trait AddToGraph {
     );
 }
 
-impl AddToGraph for Belt<i32> {
+impl AddToGraph for FBBelt<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        add_belt_to_graph(&Entity::Belt(*self), graph, pos_to_connector)
+        add_belt_to_graph(&FBEntity::Belt(*self), graph, pos_to_connector)
     }
 }
 
-impl AddToGraph for Underground<i32> {
+impl AddToGraph for FBUnderground<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        add_belt_to_graph(&Entity::Underground(*self), graph, pos_to_connector)
+        add_belt_to_graph(&FBEntity::Underground(*self), graph, pos_to_connector)
     }
 }
 
-impl AddToGraph for Splitter<i32> {
+impl AddToGraph for FBSplitter<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
