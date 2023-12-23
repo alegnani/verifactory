@@ -116,13 +116,13 @@ impl Z3Proofs for Z3Backend {
 
 #[cfg(test)]
 mod test {
-    use crate::{compiler::Compiler, ir::FlowGraphFun, utils::load_entities};
+    use crate::{compiler::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
     use super::*;
 
     #[test]
     fn balancer_3_2() {
-        let entities = load_entities("tests/3-2");
+        let entities = file_to_entities("tests/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3]);
         graph.to_svg("tests/3-2.svg").unwrap();
@@ -132,7 +132,7 @@ mod test {
 
     #[test]
     fn balancer_3_2_broken() {
-        let entities = load_entities("tests/3-2-broken");
+        let entities = file_to_entities("tests/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3]);
         graph.to_svg("tests/3-2-broken.svg").unwrap();
@@ -142,7 +142,7 @@ mod test {
 
     #[test]
     fn balancer_2_4_broken() {
-        let entities = load_entities("tests/2-4-broken");
+        let entities = file_to_entities("tests/2-4-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[2, 7]);
         graph.to_svg("tests/2-4-broken.svg").unwrap();

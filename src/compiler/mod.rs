@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    entities::{BeltType, EntityId, FBEntity, FBUnderground},
+    entities::{BeltType, EntityId, FBEntity, FBUnderground, InserterTrait},
     ir::{Edge, FlowGraph, Input, Node, Output},
     utils::{Direction, Position},
 };

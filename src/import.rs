@@ -1,6 +1,8 @@
 //! Utility functions to convert a Factorio blueprint string into a list of `FBEntity`s.
 //! A description of the JSON representation of the blueprint string can be found [here](https://wiki.factorio.com/Blueprint_string_format).
 
+use std::fs;
+
 use anyhow::{anyhow, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
@@ -230,9 +232,9 @@ fn normalize_entities(entities: &[FBEntity<f64>]) -> Vec<FBEntity<i32>> {
         .collect()
 }
 
-/// Parses a blueprint string, as exported from Factorio, to a list of `FBEntity`s.
+/// Parses a blueprint string, as exported from Factorio, to a list of `FBEntity`s
+///
 /// Unsupported entities, like power poles, are skipped.
-/// Returns an `Err` if parsing fails.
 pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> {
     let json = decompress_string(blueprint_string)?;
     let mut entities: Vec<_> = get_json_entities(json)?
@@ -265,6 +267,14 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
         .collect::<Vec<_>>();
     entities.extend(phantoms);
     Ok(entities)
+}
+
+/// Parses a file containing a blueprint string to a list of `FBEntity`s.
+///
+/// Unsupported entities, like power poles, are skipped.
+pub fn file_to_entities(file: &str) -> Result<Vec<FBEntity<i32>>> {
+    let blueprint_string = fs::read_to_string(file)?;
+    string_to_entities(&blueprint_string)
 }
 
 #[cfg(test)]
