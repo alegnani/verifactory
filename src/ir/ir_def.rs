@@ -50,8 +50,8 @@ pub struct Merger {
     pub id: EntityId,
 }
 
-/// A components that only exists for debugging purposes. A path of connectors can represent,
-/// for example, a line of belts with no mergers/splitters/...
+/// A components that represents a single belt.
+/// It's additionally used to model the input and output of splitters and mergers.
 ///
 /// Each connector *must* have in_degree and out_degree equal to 1.
 ///
@@ -86,7 +86,13 @@ pub struct Splitter {
 }
 
 pub trait Lattice {
+    /// Compute the meet operation of two elements of a lattice
+    ///
+    /// Logically similar to an `AND`.
     fn meet(&self, other: &Self) -> Self;
+    /// Compute the join operation of two elements of a lattice
+    ///
+    /// Logically similar to an `OR`.
     fn join(&self, other: &Self) -> Self;
 }
 
@@ -145,21 +151,35 @@ impl Lattice for Edge {
     }
 }
 
+/// Graph of the IR
 pub type FlowGraph = petgraph::Graph<Node, Edge, petgraph::Directed>;
 
 pub trait GraphHelper {
+    /// Returns the in-degree of the given node at `node_idx`
     fn in_deg(&self, node_idx: NodeIndex) -> usize;
+    /// Returns the out-degree of the given node at `node_idx`
     fn out_deg(&self, node_idx: NodeIndex) -> usize;
 
+    /// Returns the neighbouring nodes of the given node at `node_idx`, having an edge going to the `node_idx`.
     fn in_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex>;
+    /// Returns the neighbouring nodes of the given node at `node_idx`, having an edge going from the `node_idx`.
     fn out_nodes(&self, node_idx: NodeIndex) -> Vec<NodeIndex>;
 
+    /// Returns shared references to the inbound edges of the node at `node_idx`
     fn in_edges(&self, node_idx: NodeIndex) -> Vec<&Edge>;
+    /// Returns shared references to the outbound edges of the node at `node_idx`
     fn out_edges(&self, node_idx: NodeIndex) -> Vec<&Edge>;
 
+    /// Returns the `EdgeIndex` to the inbound edges of the node at `node_idx`
     fn in_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
+    /// Returns the `EdgeIndex` to the outbound edges of the node at `node_idx`
     fn out_edge_idx(&self, node_idx: NodeIndex) -> Vec<EdgeIndex>;
 
+    /// Returns the `EdgeIndex` of the edge from/to `node_idx`, going in the given direction and having the correct `Side` label.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is no edge matching all the constraints.
     fn get_edge(&self, node_idx: NodeIndex, dir: petgraph::Direction, side: Side) -> EdgeIndex;
 }
 
