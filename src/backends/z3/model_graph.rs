@@ -9,23 +9,11 @@ use crate::ir::FlowGraph;
 
 use super::model_entities::{Z3Edge, Z3Node};
 
+#[derive(Default)]
 pub struct Z3Helper<'a> {
     pub edge_map: HashMap<EdgeIndex, Real<'a>>,
     pub input_map: HashMap<NodeIndex, Int<'a>>,
     pub output_map: HashMap<NodeIndex, Real<'a>>,
-}
-
-impl<'a> Z3Helper<'a> {
-    pub fn new() -> Self {
-        let edge_map = HashMap::new();
-        let input_map = HashMap::new();
-        let output_map = HashMap::new();
-        Self {
-            edge_map,
-            input_map,
-            output_map,
-        }
-    }
 }
 
 pub struct Z3Backend {
@@ -63,7 +51,7 @@ impl Z3Backend {
     }
 
     pub fn model(&self) -> Z3Helper {
-        let mut helper = Z3Helper::new();
+        let mut helper = Z3Helper::default();
         /* encode edges as variables in z3 */
         for edge_idx in self.graph.edge_indices() {
             let edge = &self.graph[edge_idx];

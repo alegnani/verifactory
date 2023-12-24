@@ -148,9 +148,6 @@ impl MyApp {
         graph.to_svg("debug.svg").unwrap();
         graph
     }
-    fn generate_z3(&self, reversed: bool) -> Z3Backend {
-        Z3Backend::new(self.generate_graph(reversed))
-    }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
         let blueprint_string = std::fs::read_to_string(file.clone())?;
