@@ -157,48 +157,47 @@ impl Z3Node for Splitter {
         let in_idx = graph.in_edge_idx(idx)[0];
         let in_var = helper.edge_map.get(&in_idx).unwrap();
 
-        let ast = match self.output_priority {
-            None => {
-                let out_idxs = graph.out_edge_idx(idx);
-                let a_idx = out_idxs[0];
-                let b_idx = out_idxs[1];
+        let side = self.output_priority;
+        let ast = if side.is_none() {
+            let out_idxs = graph.out_edge_idx(idx);
+            let a_idx = out_idxs[0];
+            let b_idx = out_idxs[1];
 
-                let a_cap = graph[a_idx].capacity;
-                let b_cap = graph[b_idx].capacity;
-                let (min_idx, max_idx) = if a_cap <= b_cap {
-                    (a_idx, b_idx)
-                } else {
-                    (b_idx, a_idx)
-                };
+            let a_cap = graph[a_idx].capacity;
+            let b_cap = graph[b_idx].capacity;
+            let (min_idx, max_idx) = if a_cap <= b_cap {
+                (a_idx, b_idx)
+            } else {
+                (b_idx, a_idx)
+            };
 
-                let min_var = helper.edge_map.get(&min_idx).unwrap();
-                let max_var = helper.edge_map.get(&max_idx).unwrap();
+            let min_var = helper.edge_map.get(&min_idx).unwrap();
+            let max_var = helper.edge_map.get(&max_idx).unwrap();
 
-                let min_cap = graph[min_idx].capacity;
-                let min_cap_var = min_cap.to_z3(ctx);
-                let out_min = min_cap * 2;
-                let out_min_var = out_min.to_z3(ctx);
+            let min_cap = graph[min_idx].capacity;
+            let min_cap_var = min_cap.to_z3(ctx);
+            let out_min = min_cap * 2;
+            let out_min_var = out_min.to_z3(ctx);
 
-                in_var
-                    .le(&out_min_var)
-                    .ite(&min_var._eq(max_var), &min_var._eq(&min_cap_var))
-            }
-            Some(side) => {
-                let prio_idx = graph.get_edge(idx, Outgoing, side);
-                let other_idx = graph.get_edge(idx, Outgoing, side.other());
+            in_var
+                .le(&out_min_var)
+                .ite(&min_var._eq(max_var), &min_var._eq(&min_cap_var))
+        } else {
+            let prio_idx = graph.get_edge(idx, Outgoing, side);
+            let other_idx = graph.get_edge(idx, Outgoing, -side);
 
-                let prio_var = helper.edge_map.get(&prio_idx).unwrap();
-                let other_var = helper.edge_map.get(&other_idx).unwrap();
+            let prio_var = helper.edge_map.get(&prio_idx).unwrap();
+            let other_var = helper.edge_map.get(&other_idx).unwrap();
 
-                let prio_cap = graph[prio_idx].capacity;
-                let prio_cap_var = prio_cap.to_z3(ctx);
-                let zero = Real::from_real(ctx, 0, 1);
+            let prio_cap = graph[prio_idx].capacity;
+            let prio_cap_var = prio_cap.to_z3(ctx);
+            let zero = Real::from_real(ctx, 0, 1);
 
-                in_var
-                    .le(&prio_cap_var)
-                    .ite(&other_var._eq(&zero), &prio_var._eq(&prio_cap_var))
-            }
+            in_var
+                .le(&prio_cap_var)
+                .ite(&other_var._eq(&zero), &prio_var._eq(&prio_cap_var))
         };
+
         helper.others.push(ast);
     }
 }

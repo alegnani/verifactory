@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, Neg, Sub};
 
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
@@ -89,6 +89,42 @@ impl From<u8> for Direction {
 pub enum Rotation {
     Clockwise,
     Anticlockwise,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
+    None,
+}
+
+impl Side {
+    pub fn is_none(&self) -> bool {
+        *self == Self::None
+    }
+}
+
+impl Neg for Side {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Self::None => Self::None,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+}
+
+impl From<Priority> for Side {
+    fn from(value: Priority) -> Self {
+        match value {
+            Priority::None => Self::None,
+            Priority::Left => Self::Left,
+            Priority::Right => Self::Right,
+        }
+    }
 }
 
 #[cfg(test)]

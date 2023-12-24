@@ -1,6 +1,7 @@
 use petgraph::Graph;
 
-use super::{Connector, Edge, FlowGraph, Input, Merger, Node, Output, Side, Splitter};
+use super::{Connector, Edge, FlowGraph, Input, Merger, Node, Output, Splitter};
+use crate::utils::Side;
 
 pub trait Reversable {
     fn reverse(&self) -> Self;
@@ -8,16 +9,7 @@ pub trait Reversable {
 
 impl Reversable for Side {
     fn reverse(&self) -> Self {
-        match self {
-            Self::Right => Self::Left,
-            Self::Left => Self::Right,
-        }
-    }
-}
-
-impl Reversable for Option<Side> {
-    fn reverse(&self) -> Self {
-        self.map(|s| s.reverse())
+        -*self
     }
 }
 
@@ -53,12 +45,7 @@ impl Reversable for FlowGraph {
         Graph::reverse(&mut rev);
         /* Reverse edge side */
         for edge in rev.edge_weights_mut() {
-            if let Some(side) = edge.side {
-                edge.side = Some(match side {
-                    Side::Left => Side::Right,
-                    Side::Right => Side::Left,
-                });
-            }
+            edge.side = -edge.side;
         }
         for node in rev.node_weights_mut() {
             *node = node.reverse();

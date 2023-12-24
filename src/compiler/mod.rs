@@ -12,7 +12,7 @@ use std::{
 use crate::{
     entities::{BeltType, EntityId, FBEntity, FBUnderground, InserterTrait},
     ir::{Edge, FlowGraph, Input, Node, Output},
-    utils::{Direction, Position},
+    utils::{Direction, Position, Side},
 };
 
 use self::compile_entities::AddToGraph;
@@ -319,7 +319,7 @@ impl Compiler {
                 for dest in set {
                     if let Some(dest_idx) = pos_to_connector.get(dest).map(|i| i.0) {
                         let edge = Edge {
-                            side: None,
+                            side: Side::None,
                             capacity: 69.into(),
                         };
                         graph.add_edge(source_idx, dest_idx, edge);

@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, fs::File, io::Write};
 
-use crate::{entities::EntityId, ir::Lattice};
+use crate::entities::EntityId;
 
-use super::{FlowGraph, GraphHelper, Node};
+use super::{FlowGraph, GraphHelper, Lattice, Node};
 use graphviz_rust::{cmd::Format, exec_dot};
 use petgraph::{dot::Dot, prelude::EdgeIndex, Direction::Outgoing};
 
@@ -184,16 +184,13 @@ impl FlowGraphHelper for FlowGraph {
                 }
                 Node::Splitter(s) => {
                     let in_idx = self.in_edge_idx(node_idx)[0];
-                    match s.output_priority {
-                        None => {
-                            let out_idxs = self.out_edge_idx(node_idx);
-                            self.shrink_capacity_splitter_no_prio(in_idx, out_idxs[0], out_idxs[1])
-                        }
-                        Some(priority) => {
-                            let prio_idx = self.get_edge(node_idx, Outgoing, priority);
-                            let other_idx = self.get_edge(node_idx, Outgoing, priority.other());
-                            self.shrink_capacity_splitter_prio(in_idx, prio_idx, other_idx)
-                        }
+                    if s.output_priority.is_none() {
+                        let out_idxs = self.out_edge_idx(node_idx);
+                        self.shrink_capacity_splitter_no_prio(in_idx, out_idxs[0], out_idxs[1])
+                    } else {
+                        let prio_idx = self.get_edge(node_idx, Outgoing, s.output_priority);
+                        let other_idx = self.get_edge(node_idx, Outgoing, -s.output_priority);
+                        self.shrink_capacity_splitter_prio(in_idx, prio_idx, other_idx)
                     }
                 }
                 Node::Merger(_) => {
