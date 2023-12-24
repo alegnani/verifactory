@@ -1,8 +1,13 @@
+//! Provides functionality to reverse the direction of a [`FlowGraph`].
+
 use petgraph::Graph;
 
 use super::{Connector, Edge, FlowGraph, Input, Merger, Node, Output, Splitter};
 use crate::utils::Side;
 
+/// Trait used to represent that something can be reversed in direction.
+///
+/// This is used to invert the direction of the [`FlowGraph`].
 pub trait Reversable {
     fn reverse(&self) -> Self;
 }
@@ -24,7 +29,7 @@ impl Reversable for Edge {
 impl Reversable for Node {
     fn reverse(&self) -> Self {
         match self {
-            Node::Connector(c) => Node::Connector(Connector { id: c.id }),
+            Node::Connector(c) => Node::Connector(Connector { ..*c }),
             Node::Input(i) => Node::Output(Output { id: i.id }),
             Node::Output(o) => Node::Input(Input { id: o.id }),
             Node::Merger(m) => Node::Splitter(Splitter {
@@ -43,10 +48,11 @@ impl Reversable for FlowGraph {
     fn reverse(&self) -> Self {
         let mut rev = self.clone();
         Graph::reverse(&mut rev);
-        /* Reverse edge side */
+        // Reverse edge side
         for edge in rev.edge_weights_mut() {
-            edge.side = -edge.side;
+            edge.side = edge.side.reverse();
         }
+        // Reverse contents of nodes
         for node in rev.node_weights_mut() {
             *node = node.reverse();
         }
