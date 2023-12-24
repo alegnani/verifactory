@@ -1,13 +1,12 @@
 //! Utility functions to convert a Factorio blueprint string into a list of `FBEntity`s.
 //! A description of the JSON representation of the blueprint string can be found [here](https://wiki.factorio.com/Blueprint_string_format).
 
-use std::fs;
-
 use anyhow::{anyhow, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
 use serde::{de::Error, Deserialize, Deserializer};
 use serde_json::Value;
+use std::fs;
 
 use crate::{
     entities::*,

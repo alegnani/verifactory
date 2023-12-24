@@ -1,8 +1,8 @@
-//! Definitions for the entities that can be part of a Factorio blueprint
-use std::ops::{Add, Sub};
-
+//! Definitions of entities that are part of a Factorio blueprint
+//!
 use crate::utils::{Direction, Position, Rotation};
 use serde::Deserialize;
+use std::ops::{Add, Sub};
 
 pub type EntityId = i32;
 

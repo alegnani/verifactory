@@ -1,5 +1,5 @@
 # Factorio Verify
-![Factorio Verify interface](teaser.png)
+![](teaser.png)
 
 Factorio Verify is a verifier for Factorio blueprints, enabling you to automatically check logical properties on a blueprint.
 Currently this is limited to checking whether or not a belt-balancer works and if the inputs get all drained the same, leading to no imbalances.
@@ -36,12 +36,14 @@ Take for example the following [64x64 belt balancer](https://fbe.teoxoy.com/?sou
 
 ## Installation
 
+The latest version of the program can be found [here](https://github.com/alegnani/factorio_verify/releases) for both Windows and Linux. 
+This option ships factorio_verify bundled with z3.
+
+### Building from source
+
 The program requires the z3 solver to be installed on the system.
 Clone the project and build it using `cargo build --release`. This will take a while!
-Then run with `cargo run --release`. (Only tested on Linux)
-
-In future an executable will be provided bundling Factorio Verify and z3 for easier installation.
-
+Then run with `cargo run --release`.
 
 ## Contributing
 
