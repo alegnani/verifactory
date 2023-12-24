@@ -316,8 +316,7 @@ impl ShrinkNodes for FlowGraph {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{compiler::Compiler, import::file_to_entities};
+    use crate::{frontend::Compiler, import::file_to_entities};
 
     #[test]
     fn test_shrinking() {

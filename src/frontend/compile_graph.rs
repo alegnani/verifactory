@@ -1,7 +1,3 @@
-//! Front-end used to convert a Factorio blueprint to the IR
-
-mod compile_entities;
-
 use petgraph::Direction::{Incoming, Outgoing};
 use relations::Relation;
 use std::{
@@ -17,7 +13,7 @@ use crate::{
     utils::{Direction, Position, Side},
 };
 
-use self::compile_entities::AddToGraph;
+use super::compile_entities::AddToGraph;
 
 trait RelationMap<T>
 where

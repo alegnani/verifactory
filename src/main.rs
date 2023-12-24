@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
 pub mod backends;
-pub mod compiler;
 pub mod entities;
+pub mod frontend;
 pub mod gui;
 pub mod import;
 pub mod ir;

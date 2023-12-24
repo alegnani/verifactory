@@ -7,11 +7,9 @@ use egui_file::FileDialog;
 use z3::{Config, Context, SatResult};
 
 use crate::{
-    backends::{
-        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, Printable, Z3Backend,
-    },
-    compiler::{Compiler, RelMap},
+    backends::{belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, Printable},
     entities::{EntityId, FBEntity},
+    frontend::{Compiler, RelMap},
     import::string_to_entities,
     ir::{FlowGraph, FlowGraphFun, Node, Reversable},
     utils::Position,

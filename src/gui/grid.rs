@@ -3,8 +3,8 @@ use std::f32::consts::PI;
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use crate::{
-    compiler::RelMap,
     entities::{BeltType, FBBelt, FBEntity, FBSplitter, Priority},
+    frontend::RelMap,
     utils::{Direction, Position, Rotation},
 };
 

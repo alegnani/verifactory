@@ -6,7 +6,7 @@ pub use model_graph::Z3Backend;
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{compiler::Compiler, import::file_to_entities, ir::FlowGraphFun};
+    use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
     #[test]
     fn model_3_2_broken() {

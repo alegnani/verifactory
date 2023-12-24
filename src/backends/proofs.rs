@@ -116,7 +116,7 @@ impl Z3Proofs for Z3Backend {
 
 #[cfg(test)]
 mod test {
-    use crate::{compiler::Compiler, import::file_to_entities, ir::FlowGraphFun};
+    use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
     use super::*;
 
