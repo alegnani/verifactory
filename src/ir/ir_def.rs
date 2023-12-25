@@ -94,6 +94,10 @@ pub trait Lattice {
     ///
     /// Logically similar to an `OR`.
     fn join(&self, other: &Self) -> Self;
+    /// Returns `true` if a join without ambiguity is possible
+    fn can_join(&self, _other: &Self) -> bool {
+        true
+    }
 }
 
 impl Lattice for Side {
@@ -110,6 +114,13 @@ impl Lattice for Side {
             (x, y) if x == y => *x,
             _ => panic!(),
         }
+    }
+
+    fn can_join(&self, other: &Self) -> bool {
+        !matches!(
+            (self, other),
+            (Self::Left, Self::Right) | (Self::Right, Self::Left)
+        )
     }
 }
 
@@ -148,6 +159,10 @@ impl Lattice for Edge {
         /* should be max but we don't want this kind of join */
         let capacity = self.capacity.min(other.capacity);
         Self { side, capacity }
+    }
+
+    fn can_join(&self, other: &Self) -> bool {
+        self.side.can_join(&other.side)
     }
 }
 

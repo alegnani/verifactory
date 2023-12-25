@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fs::File, io::Write};
 
 use crate::entities::EntityId;
 
-use super::{FlowGraph, GraphHelper, Lattice, Node};
+use super::{Connector, FlowGraph, GraphHelper, Lattice, Node};
 use graphviz_rust::{cmd::Format, exec_dot};
 use petgraph::{dot::Dot, prelude::EdgeIndex, Direction::Outgoing};
 
@@ -11,6 +11,7 @@ use petgraph::{dot::Dot, prelude::EdgeIndex, Direction::Outgoing};
 /// The result of the coalescing operation is A->B, with the edge having the minimum of the capacities of the previous two edges.
 /// Coalescing also removes connectors with a missing in- or out-edge, e.g. after removing an input or output node.
 /// Following this also splitters and mergers with only one out- and in-edge, respectively, get optimized away.
+#[derive(Clone, Copy)]
 pub enum CoalesceStrength {
     /// Coalescing without loss of information about the structure of the blueprint.
     /// Coalesced only if:
@@ -51,15 +52,15 @@ trait ShrinkNodes {
 }
 
 pub trait FlowGraphFun {
-    fn simplify(&mut self, exclude_list: &[EntityId]);
+    fn simplify(&mut self, exclude_list: &[EntityId], strength: CoalesceStrength);
     fn to_svg(&self, path: &str) -> anyhow::Result<()>;
 }
 
 impl FlowGraphFun for FlowGraph {
-    fn simplify(&mut self, exclude_list: &[EntityId]) {
+    fn simplify(&mut self, exclude_list: &[EntityId], strength: CoalesceStrength) {
         self.remove_false_io(exclude_list);
         loop {
-            if self.coalesce_nodes(CoalesceStrength::Aggressive) {
+            if self.coalesce_nodes(strength) {
                 continue;
             }
 
@@ -127,31 +128,30 @@ impl FlowGraphHelper for FlowGraph {
                         }
                     }
                 }
-                Node::Merger(_) => {
-                    /* can only remove if in_deg == 1 */
-                    if in_deg == 2 {
+                Node::Merger(_) | Node::Splitter(_) => {
+                    // skip if fully populated
+                    if in_deg + out_deg == 3 {
                         continue;
                     }
-                }
-                Node::Splitter(_) => {
-                    /* can only remove if out_deg == 1 */
-                    if out_deg == 2 {
-                        continue;
-                    }
+                    // substitue a merger/splitter with a connector as it must have in_deg = 1 and out_deg = 1
+                    self[node_idx] = Node::Connector(Connector { id: node.get_id() });
+                    return true;
                 }
                 _ => continue,
             }
             let in_edge = self.in_edges(node_idx)[0];
             let out_edge = self.out_edges(node_idx)[0];
-            /* When shrinking connectors use join in order to preserve
+            /*
+             * When shrinking connectors use join in order to preserve
              * side information for splitters/mergers.
-             * When shrinking mergers/splitters we can safely lose this
-             * information (or at least in the case of no inserters and no
-             * 2-sided belts). */
-            let new_edge = in_edge.join(out_edge);
-            self.add_edge(source_node, target_node, new_edge);
-            self.remove_node(node_idx);
-            return true;
+             * Skip merging two edges if they can't be joined without ambiguity.
+             */
+            if in_edge.can_join(out_edge) {
+                let new_edge = in_edge.join(out_edge);
+                self.add_edge(source_node, target_node, new_edge);
+                self.remove_node(node_idx);
+                return true;
+            }
         }
         false
     }
@@ -316,14 +316,18 @@ impl ShrinkNodes for FlowGraph {
 
 #[cfg(test)]
 mod test {
-    use crate::{frontend::Compiler, import::file_to_entities};
+    use crate::{
+        frontend::Compiler,
+        import::file_to_entities,
+        ir::{graph_algos::FlowGraphHelper, CoalesceStrength::Aggressive, FlowGraphFun},
+    };
 
     #[test]
     fn test_shrinking() {
         let entities = file_to_entities("tests/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.remove_false_io(&[]);
-        graph.simplify(&[4, 5, 6]);
+        graph.simplify(&[4, 5, 6], Aggressive);
         graph.to_svg("tests/3-2-broken.svg").unwrap();
         assert_eq!(graph.node_count(), 10);
         assert_eq!(graph.edge_count(), 9);
@@ -333,7 +337,7 @@ mod test {
     fn belt_reduction() {
         let entities = file_to_entities("tests/belt_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[]);
+        graph.simplify(&[], Aggressive);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
         assert_eq!(graph.edge_weights().next().unwrap().capacity, 15.into());
@@ -344,7 +348,7 @@ mod test {
     fn splitter_reduction() {
         let entities = file_to_entities("tests/splitter_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[4]);
+        graph.simplify(&[4], Aggressive);
         graph.to_svg("tests/splitter_reduction.svg").unwrap();
         assert_eq!(graph.node_count(), 4);
         assert_eq!(graph.edge_count(), 3);
@@ -354,7 +358,7 @@ mod test {
     fn splitter_merger_reduction() {
         let entities = file_to_entities("tests/splitter_merger_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[4, 5]);
+        graph.simplify(&[4, 5], Aggressive);
         graph.to_svg("tests/splitter_merger_reduction.svg").unwrap();
         assert_eq!(graph.node_count(), 16);
         assert_eq!(graph.edge_count(), 16);
@@ -365,6 +369,6 @@ mod test {
         let entities = file_to_entities("tests/prio_splitter").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.to_svg("tests/prio_splitter.svg").unwrap();
-        graph.simplify(&[]);
+        graph.simplify(&[], Aggressive);
     }
 }

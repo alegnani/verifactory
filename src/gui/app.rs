@@ -11,7 +11,7 @@ use crate::{
     entities::{EntityId, FBEntity},
     frontend::{Compiler, RelMap},
     import::string_to_entities,
-    ir::{FlowGraph, FlowGraphFun, Node, Reversable},
+    ir::{CoalesceStrength, FlowGraph, FlowGraphFun, Node, Reversable},
     utils::Position,
 };
 
@@ -137,7 +137,7 @@ impl MyApp {
 
         println!("Remove list: {:?}", removed);
 
-        graph.simplify(&removed);
+        graph.simplify(&removed, CoalesceStrength::Lossless);
         let graph = if reversed {
             Reversable::reverse(&graph)
         } else {
@@ -161,7 +161,7 @@ impl MyApp {
         let compiler = Compiler::new(loaded_entities);
         self.feeds_from = compiler.feeds_from.clone();
         self.graph = compiler.create_graph();
-        self.graph.simplify(&[]);
+        self.graph.simplify(&[], CoalesceStrength::Lossless);
         self.io_state = IOState::from_graph(&self.graph);
         self.proof_state = ProofState::default();
         Ok(())

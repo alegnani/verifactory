@@ -440,7 +440,7 @@ mod tests {
         let entities = load("tests/belt_weave");
         let ctx = Compiler::new(entities);
         let mut graph = ctx.create_graph();
-        graph.simplify(&[]);
+        graph.simplify(&[], crate::ir::CoalesceStrength::Aggressive);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
         graph.to_svg("tests/belt_weave.svg").unwrap();

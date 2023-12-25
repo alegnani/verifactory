@@ -62,7 +62,11 @@ impl Reversable for FlowGraph {
 
 #[cfg(test)]
 mod test {
-    use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
+    use crate::{
+        frontend::Compiler,
+        import::file_to_entities,
+        ir::{CoalesceStrength::Aggressive, FlowGraphFun},
+    };
 
     use super::*;
 
@@ -70,7 +74,7 @@ mod test {
     fn reverse_3_2() {
         let entities = file_to_entities("tests/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[3]);
+        graph.simplify(&[3], Aggressive);
         graph.to_svg("tests/3-2-normal.svg").unwrap();
         let rev = graph.reverse();
         rev.to_svg("tests/3-2-rev.svg").unwrap();
