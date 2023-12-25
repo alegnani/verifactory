@@ -3,7 +3,9 @@ use std::{
     path::PathBuf,
 };
 
+use egui::{Align2, Direction, Event};
 use egui_file::FileDialog;
+use egui_toast::{Toast, ToastOptions, Toasts};
 use z3::{Config, Context, SatResult};
 
 use crate::{
@@ -170,7 +172,31 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // Set up toast notifications in the top right
+        let mut toasts = Toasts::new()
+            .anchor(Align2::RIGHT_TOP, (-10.0, 10.0))
+            .direction(Direction::TopDown);
+
         self.draw_menu(ctx);
+
+        // Handle Ctrl+V to load blueprint from clipboard
+        ctx.input(|i| {
+            let pasted_string = i.events.iter().find_map(|e| match e {
+                Event::Paste(s) => Some(s),
+                _ => None,
+            });
+            if let Some(pasted_string) = pasted_string {
+                if self.load_string(pasted_string).is_err() {
+                    toasts.add(Toast {
+                        text: "Failed to load blueprint from clipboard!".into(),
+                        kind: egui_toast::ToastKind::Error,
+                        options: ToastOptions::default().duration_in_seconds(10.0),
+                    });
+                }
+            }
+        });
+
+        toasts.show(ctx);
 
         egui::TopBottomPanel::top("blueprint_panel").show(ctx, |ui| {
             let s = &self.grid_settings;
@@ -288,14 +314,14 @@ impl eframe::App for MyApp {
         /* Show features and current state of project */
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Current state of the project");
-            ui.label("- To work Factorio Verify needs z3 to be installed on your system.");
             ui.label("- Currently only supports belts, underground belts and splitters (with priorities).\n  \
             Side-loading and other constructs taking advantage of a belt being split into two lanes is currently WIP.\n  \
             Read: The analysis will *definetely* be wrong.");
             ui.label("- All belts show as yellow but they are still modelled correctly.\n  \
             Clicking on a belt will show its real throughput (15 for yellow, 30 for red, 45 for blue.");
-            ui.label("- Don't load too big blueprints as they won't fit on the screen.\n  \
-            A zoomable and movable canvas is WIP.");
+            ui.label("- Big blueprints won't fit on the screen.\n  \
+            Use *View > Decrease blueprint size* to zoom out. \
+            A better, zoomable and movable, canvas is WIP.");
             ui.label("- Factorio Verify can prove much more than the automatic proofs above.\n  \
             A custom language to specify own properties is WIP.");
             ui.label("\n  Thank you for testing Factorio Verify and have fun.\n  The factory must grow!");
