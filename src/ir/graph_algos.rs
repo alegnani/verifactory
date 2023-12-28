@@ -24,11 +24,24 @@ pub enum CoalesceStrength {
     Aggressive,
 }
 
-trait FlowGraphHelper {
+// TODO: docs
+/// Trait to define helper functions for graph simplification on a [`petgraph::Graph`] type.
+trait FlowGraphSimplify {
+    /// Merges superfluous nodes given a [`CoalesceStrength`] strategy.
+    ///
+    /// Returns `true` after the first node has been mutated.
+    /// Otherwise, if no node has been mutated, return `false`.
     fn coalesce_nodes(&mut self, strength: CoalesceStrength) -> bool;
+    /// Shrinks the capacities of all edges to their minimum bound.
+    ///
+    /// Returns `true` after the first edge has been mutated.
+    /// Otherwise, if no edge has been mutated, return `false`.
     fn shrink_capacities(&mut self) -> bool;
+    /// Removes the inputs and outputs from the graph associated with the provided [`EntityId`]s.
     fn remove_false_io(&mut self, exclude_list: &[EntityId]);
 }
+
+/// Trait to define how different nodes in the IR graph are shrunk.
 trait ShrinkNodes {
     fn shrink_capacity_connector(&mut self, in_idx: EdgeIndex, out_idx: EdgeIndex) -> bool;
     fn shrink_capacity_splitter_no_prio(
@@ -51,6 +64,7 @@ trait ShrinkNodes {
     ) -> bool;
 }
 
+/// Trait exposing the simplification and exporting of the IR graph
 pub trait FlowGraphFun {
     fn simplify(&mut self, exclude_list: &[EntityId], strength: CoalesceStrength);
     fn to_svg(&self, path: &str) -> anyhow::Result<()>;
@@ -81,7 +95,7 @@ impl FlowGraphFun for FlowGraph {
     }
 }
 
-impl FlowGraphHelper for FlowGraph {
+impl FlowGraphSimplify for FlowGraph {
     fn coalesce_nodes(&mut self, strength: CoalesceStrength) -> bool {
         for node_idx in self.node_indices() {
             let in_deg = self.in_deg(node_idx);
@@ -246,8 +260,6 @@ impl ShrinkNodes for FlowGraph {
         let a_cap = self[a_idx].capacity;
         let b_cap = self[b_idx].capacity;
         let in_cap = self[in_idx].capacity;
-        tracing::warn!("{:?}", a_cap);
-        tracing::warn!("CAP: {}", a_cap);
         let out_cap = a_cap + b_cap;
 
         let (new_in, new_a, new_b) = match out_cap.cmp(&in_cap) {
@@ -319,7 +331,7 @@ mod test {
     use crate::{
         frontend::Compiler,
         import::file_to_entities,
-        ir::{graph_algos::FlowGraphHelper, CoalesceStrength::Aggressive, FlowGraphFun},
+        ir::{graph_algos::FlowGraphSimplify, CoalesceStrength::Aggressive, FlowGraphFun},
     };
 
     #[test]
