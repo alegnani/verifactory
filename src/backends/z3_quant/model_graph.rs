@@ -5,7 +5,14 @@ use z3::{
     Context, SatResult, Solver,
 };
 
-use crate::{backends::proofs::Negatable, entities::FBEntity, ir::FlowGraph};
+use crate::{
+    backends::{
+        proofs::Negatable,
+        z3_quant::model_entities_blocked::{Z3EdgeBlocked, Z3NodeBlocked},
+    },
+    entities::FBEntity,
+    ir::FlowGraph,
+};
 
 use super::model_entities::{Z3Edge, Z3Node};
 
@@ -16,6 +23,9 @@ pub struct Z3QuantHelper<'a> {
     pub output_map: HashMap<NodeIndex, Real<'a>>,
     pub input_const: Vec<Bool<'a>>,
     pub others: Vec<Bool<'a>>,
+    pub blocked_edge_map: HashMap<EdgeIndex, Bool<'a>>,
+    pub blocked_input_map: HashMap<NodeIndex, Bool<'a>>,
+    pub blocked_output_map: HashMap<NodeIndex, Bool<'a>>,
 }
 
 pub struct ProofPrimitives<'a> {
@@ -29,13 +39,19 @@ pub struct ProofPrimitives<'a> {
     pub input_map: HashMap<NodeIndex, Int<'a>>,
     /// `Vec` of all the output throughput variables in z3
     pub output_bounds: Vec<Real<'a>>,
+    /// Map from `NodeIndex` to the associated throughput variable in z3
+    pub output_map: HashMap<NodeIndex, Real<'a>>,
+    /// Map from `NodeIndex` to the associated input blocked variable in z3
+    pub blocked_input_map: HashMap<NodeIndex, Bool<'a>>,
+    /// Map from `NodeIndex` to the associated output blocked variable in z3
+    pub blocked_output_map: HashMap<NodeIndex, Bool<'a>>,
     /// min. and max. throughput of an edge constraint
     pub edge_bounds: Vec<Real<'a>>,
     /// constraints like kirchhoffs law or implementation of splitters
     pub model_constraint: Bool<'a>,
 }
 
-pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F) -> SatResult
+pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F, blocked: bool) -> SatResult
 where
     F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
 {
@@ -45,12 +61,20 @@ where
     // encode edges as variables in z3
     for edge_idx in graph.edge_indices() {
         let edge = graph[edge_idx];
-        edge.model(edge_idx, ctx, &mut helper);
+        if blocked {
+            edge.model_blocked(edge_idx, ctx, &mut helper);
+        } else {
+            edge.model(edge_idx, ctx, &mut helper);
+        }
     }
     // encode nodes as equations
     for node_idx in graph.node_indices() {
         let node = &graph[node_idx];
-        node.model(graph, node_idx, ctx, &mut helper);
+        if blocked {
+            node.model_blocked(graph, node_idx, ctx, &mut helper);
+        } else {
+            node.model(graph, node_idx, ctx, &mut helper);
+        }
     }
 
     // add stuff to solver
@@ -59,6 +83,9 @@ where
 
     let output_map = mem::take(&mut helper.output_map);
     let output_bounds = output_map.values().cloned().collect::<Vec<_>>();
+
+    let blocked_input_map = mem::take(&mut helper.blocked_input_map);
+    let blocked_output_map = mem::take(&mut helper.blocked_output_map);
 
     let edge_map = mem::take(&mut helper.edge_map);
     let edge_bounds = edge_map.values().cloned().collect::<Vec<_>>();
@@ -71,6 +98,9 @@ where
         input_bounds,
         input_map,
         output_bounds,
+        output_map,
+        blocked_input_map,
+        blocked_output_map,
         edge_bounds,
         model_constraint,
     };
@@ -84,13 +114,13 @@ where
 }
 
 /// Conjunction of a slice of `Bool`s.
-fn vec_and<'a>(ctx: &'a Context, vec: &[Bool<'a>]) -> Bool<'a> {
+pub fn vec_and<'a>(ctx: &'a Context, vec: &[Bool<'a>]) -> Bool<'a> {
     let slice = vec.iter().collect::<Vec<_>>();
     Bool::and(ctx, &slice)
 }
 
 /// Equality of a slice of `Ast`s.
-fn equality<'a, T>(ctx: &'a Context, values: &[T]) -> Bool<'a>
+pub fn equality<'a, T>(ctx: &'a Context, values: &[T]) -> Bool<'a>
 where
     T: Ast<'a> + Sized,
 {
@@ -143,8 +173,8 @@ pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 /// # Definiton
 ///
 /// Equal drain: When operating all the inputs are consumed equally, not resulting in any imbalances.
-/// TODO: add links, 2-2 splitter priority + bottleneck on output
-/// E.g. [this]() is a 2-2 equal drain belt balancer; [this]() is only a 2-2 belt balancer.
+/// E.g. [this](https://fbe.teoxoy.com/?source=0eJyd0ttqwzAMBuB30bVTkjSliy/3GqUUJ1WLwFGMrYyFkHefnYxRGPR0aVv/JyN7gsYO6DyxgJ6A2p4D6MMEga5sbNqT0SFoIMEOFLDp0upigmTiDQfXe8katAKzAuIzfoMu5qMCZCEhXLnbWHCWRNBHzfUh1vSc+sRcrmAEneWbXbTO5LFdD/NfbTzx0DUxGTuo6d5d/tEJXfXisV6+qr+Cb9/FnxhL9fZYnsB36VWXb6Bvfo2CL/RhiZQfRbWvy31V1vW2LhRYE7vG6s+/6nn+AWY2ztQ=) is a 2-2 equal drain belt balancer;
+/// [this](https://fbe.teoxoy.com/?source=0eJyVktFqwzAMRf9Fz/ZI0pQuftxvlFGcVh0GRza2MhZC/n1yOkbHYGuejC3dc7myZuj9iDE5YjAzuHOgDOY4Q3ZvZH154ykiGHCMAyggO5Tb1WbWnCzlGBLrHj3DosDRBT/A1MurAiR27PCG+0OmIIYsnYGKm6h19bRXMIGRU5gXl/B8K1df1OlE49BjKk7qJzxH75il9AtbrUz9ALQpQeLIJ5lLSFIRuMdrSbgtyYYguzv2wwPS9f/gdgN4C3df/nhdCnO3QwreMeVV0jzX7aFrDm3TdbuuVuCtuEr3y3f3snwCz/TTyA==) is only a 2-2 belt balancer.
 ///
 /// # Precondition
 ///
@@ -195,6 +225,13 @@ pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 /// Assumes that the model is a valid belt balancer.
 ///
 /// TODO: fill
+///
+/// To prove:
+/// forall inputs. exist edges. s.t. the model is satisfied and inputs_sum <= output_cap
+/// prove the inverse:
+/// not forall inputs. exists edges. s.t. the model is satisfied
+/// exists inputs. not exists edges. s.t. the model is satisfied
+/// exists inputs. forall edges. the model is NOT satisfied
 pub fn throughput_unlimited<'a>(
     entities: Vec<FBEntity<i32>>,
 ) -> impl Fn(ProofPrimitives<'a>) -> Bool<'a> {
@@ -239,7 +276,14 @@ pub fn throughput_unlimited<'a>(
             &[],
             &all_edges,
         );
-        Bool::and(p.ctx, &[&input_condition, &all_outputs])
+        // Don't block any outputs
+        let outputs = p.blocked_output_map.values().collect::<Vec<_>>();
+        let not_blocked_output = Bool::or(p.ctx, &outputs).not();
+
+        Bool::and(
+            p.ctx,
+            &[&input_condition, &all_outputs, &not_blocked_output],
+        )
     };
     i
 }

@@ -4,7 +4,7 @@ use petgraph::{
     Direction::Outgoing,
 };
 use z3::{
-    ast::{Ast, Int, Real},
+    ast::{Ast, Bool, Int, Real},
     Context,
 };
 
@@ -51,7 +51,7 @@ impl Z3Node for Node {
     }
 }
 
-fn kirchhoff_law<'a>(
+pub fn kirchhoff_law<'a>(
     node_idx: NodeIndex,
     graph: &FlowGraph,
     ctx: &'a Context,
@@ -154,11 +154,25 @@ impl Z3Node for Splitter {
         helper: &mut Z3QuantHelper<'a>,
     ) {
         kirchhoff_law(idx, graph, ctx, helper);
+
+        let splitter_cond = self.get_splitter_cond(graph, idx, ctx, helper);
+        helper.others.push(splitter_cond);
+    }
+}
+
+impl Splitter {
+    pub fn get_splitter_cond<'a>(
+        &self,
+        graph: &FlowGraph,
+        idx: NodeIndex,
+        ctx: &'a Context,
+        helper: &mut Z3QuantHelper<'a>,
+    ) -> Bool<'a> {
         let in_idx = graph.in_edge_idx(idx)[0];
         let in_var = helper.edge_map.get(&in_idx).unwrap();
 
         let side = self.output_priority;
-        let ast = if side.is_none() {
+        if side.is_none() {
             let out_idxs = graph.out_edge_idx(idx);
             let a_idx = out_idxs[0];
             let b_idx = out_idxs[1];
@@ -196,9 +210,7 @@ impl Z3Node for Splitter {
             in_var
                 .le(&prio_cap_var)
                 .ite(&other_var._eq(&zero), &prio_var._eq(&prio_cap_var))
-        };
-
-        helper.others.push(ast);
+        }
     }
 }
 

@@ -266,7 +266,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(false);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, belt_balancer_f);
+                    let res = model_f(&graph, &ctx, belt_balancer_f, false);
                     self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
@@ -282,7 +282,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(true);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, equal_drain_f);
+                    let res = model_f(&graph, &ctx, equal_drain_f, false);
                     self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
@@ -301,7 +301,7 @@ impl eframe::App for MyApp {
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
                     let entities = self.grid.iter().flatten().flatten().cloned().collect();
-                    let res = model_f(&graph, &ctx, throughput_unlimited(entities));
+                    let res = model_f(&graph, &ctx, throughput_unlimited(entities), true);
                     self.proof_state.throughput_unlimited = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.throughput_unlimited {
