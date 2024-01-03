@@ -50,5 +50,10 @@ Then run with `cargo run --release`.
 > **Warning!**
 > The project is still in a very early stage, thus lots of design choices are still open and the code quality is very low
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change. Note that documentation is non-existant and there are no design documents (yet).
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change. Note that documentation is non-existant and the design document is mostly incomplete.
 Bug reports are greatly appreciated. :)
+
+## Design Document
+
+More information about how the project is structured can be found under this [link](design_doc/design_doc.html).
+This includes the design document specifying how the underlying conversion from Factorio blueprints to the z3 model works.

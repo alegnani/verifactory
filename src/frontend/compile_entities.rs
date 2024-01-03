@@ -3,13 +3,13 @@ use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 
 use crate::{
-    entities::{Belt, Entity, Splitter, Underground},
-    ir::{self, Connector, Edge, FlowGraph, Node, Side},
-    utils::Position,
+    entities::{FBBelt, FBEntity, FBSplitter, FBUnderground},
+    ir::{self, Connector, Edge, FlowGraph, Node},
+    utils::{Position, Side},
 };
 
 fn add_belt_to_graph(
-    belt: &Entity<i32>,
+    belt: &FBEntity<i32>,
     graph: &mut FlowGraph,
     pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
 ) {
@@ -29,7 +29,7 @@ fn add_belt_to_graph(
 
     /* add the edges */
     let edge = Edge {
-        side: None,
+        side: Side::None,
         capacity,
     };
 
@@ -44,39 +44,40 @@ pub trait AddToGraph {
     );
 }
 
-impl AddToGraph for Belt<i32> {
+impl AddToGraph for FBBelt<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        add_belt_to_graph(&Entity::Belt(*self), graph, pos_to_connector)
+        add_belt_to_graph(&FBEntity::Belt(*self), graph, pos_to_connector)
     }
 }
 
-impl AddToGraph for Underground<i32> {
+impl AddToGraph for FBUnderground<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
-        add_belt_to_graph(&Entity::Underground(*self), graph, pos_to_connector)
+        add_belt_to_graph(&FBEntity::Underground(*self), graph, pos_to_connector)
     }
 }
 
-impl AddToGraph for Splitter<i32> {
+impl AddToGraph for FBSplitter<i32> {
     fn add_to_graph(
         &self,
         graph: &mut FlowGraph,
         pos_to_connector: &mut HashMap<Position<i32>, (NodeIndex, NodeIndex)>,
     ) {
         let id = self.base.id;
-        let input_priority = self.input_prio.into();
-        let output_priority = self.output_prio.into();
 
-        let ir_merger = ir::Merger { input_priority, id };
+        let ir_merger = ir::Merger {
+            input_priority: self.input_prio.into(),
+            id,
+        };
         let ir_splitter = ir::Splitter {
-            output_priority,
+            output_priority: self.output_prio.into(),
             id,
         };
         let capacity = self.base.throughput.into();
@@ -103,15 +104,15 @@ impl AddToGraph for Splitter<i32> {
 
         /* add the edges */
         let merger_splitter_edge = Edge {
-            side: None,
+            side: Side::None,
             capacity: capacity * GenericFraction::new(2u128, 1u128),
         };
         let r_edge = Edge {
-            side: Some(Side::Right),
+            side: Side::Right,
             capacity,
         };
         let l_edge = Edge {
-            side: Some(Side::Left),
+            side: Side::Left,
             capacity,
         };
 

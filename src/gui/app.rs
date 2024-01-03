@@ -3,15 +3,19 @@ use std::{
     path::PathBuf,
 };
 
+use egui::{Align2, Direction, Event};
 use egui_file::FileDialog;
-use z3::SatResult;
+use egui_toast::{Toast, ToastOptions, Toasts};
+use z3::{Config, Context, SatResult};
 
 use crate::{
-    backends::{Printable, Z3Backend, Z3Proofs},
-    compiler::{Compiler, RelMap},
-    entities::{Entity, EntityId},
+    backends::{
+        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, ModelType, Printable,
+    },
+    entities::{EntityId, FBEntity},
+    frontend::{Compiler, RelMap},
     import::string_to_entities,
-    ir::{FlowGraph, FlowGraphFun, Node, Reversable},
+    ir::{CoalesceStrength, FlowGraph, FlowGraphFun, Node, Reversable},
     utils::Position,
 };
 
@@ -75,9 +79,10 @@ impl IOState {
 pub struct ProofState {
     balancer: Option<SatResult>,
     equal_drain: Option<SatResult>,
+    throughput_unlimited: Option<SatResult>,
 }
 
-pub type EntityGrid = Vec<Vec<Option<Entity<i32>>>>;
+pub type EntityGrid = Vec<Vec<Option<FBEntity<i32>>>>;
 pub struct MyApp {
     pub grid: EntityGrid,
     pub grid_settings: GridSettings,
@@ -85,7 +90,7 @@ pub struct MyApp {
     pub open_file_state: FileState,
     pub proof_state: ProofState,
     pub graph: FlowGraph,
-    pub selection: Option<Entity<i32>>,
+    pub selection: Option<FBEntity<i32>>,
     pub blueprint_string: BlueprintString,
     pub feeds_from: RelMap<Position<i32>>,
     pub show_error: bool,
@@ -119,7 +124,7 @@ impl Default for MyApp {
 }
 
 impl MyApp {
-    fn generate_z3(&self, reversed: bool) -> Z3Backend {
+    fn generate_graph(&self, reversed: bool) -> FlowGraph {
         let mut graph = self.graph.clone();
         let io_state = &self.io_state;
         let removed_inputs = io_state
@@ -136,13 +141,14 @@ impl MyApp {
 
         println!("Remove list: {:?}", removed);
 
-        graph.simplify(&removed);
+        graph.simplify(&removed, CoalesceStrength::Aggressive);
         let graph = if reversed {
             Reversable::reverse(&graph)
         } else {
             graph
         };
-        Z3Backend::new(graph)
+        graph.to_svg("debug.svg").unwrap();
+        graph
     }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
@@ -159,7 +165,7 @@ impl MyApp {
         let compiler = Compiler::new(loaded_entities);
         self.feeds_from = compiler.feeds_from.clone();
         self.graph = compiler.create_graph();
-        self.graph.simplify(&[]);
+        self.graph.simplify(&[], CoalesceStrength::Lossless);
         self.io_state = IOState::from_graph(&self.graph);
         self.proof_state = ProofState::default();
         Ok(())
@@ -168,7 +174,31 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // Set up toast notifications in the top right
+        let mut toasts = Toasts::new()
+            .anchor(Align2::RIGHT_TOP, (-10.0, 10.0))
+            .direction(Direction::TopDown);
+
         self.draw_menu(ctx);
+
+        // Handle Ctrl+V to load blueprint from clipboard
+        ctx.input(|i| {
+            let pasted_string = i.events.iter().find_map(|e| match e {
+                Event::Paste(s) => Some(s),
+                _ => None,
+            });
+            if let Some(pasted_string) = pasted_string {
+                if self.load_string(pasted_string).is_err() {
+                    toasts.add(Toast {
+                        text: "Failed to load blueprint from clipboard!".into(),
+                        kind: egui_toast::ToastKind::Error,
+                        options: ToastOptions::default().duration_in_seconds(10.0),
+                    });
+                }
+            }
+        });
+
+        toasts.show(ctx);
 
         egui::TopBottomPanel::top("blueprint_panel").show(ctx, |ui| {
             let s = &self.grid_settings;
@@ -235,8 +265,11 @@ impl eframe::App for MyApp {
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3(false);
-                    self.proof_state.balancer = Some(z3.is_balancer());
+                    let graph = self.generate_graph(false);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+                    self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
@@ -248,27 +281,62 @@ impl eframe::App for MyApp {
             ui.heading("Is it an equal drain belt-balancer (assumes it is a belt-balancer)?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
-                    let z3 = self.generate_z3(true);
-                    self.proof_state.equal_drain = Some(z3.is_equal_drain_balancer());
+                    let graph = self.generate_graph(true);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let res = model_f(&graph, &ctx, equal_drain_f, ModelType::Normal);
+                    self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
+
+            ui.label("\n");
+
+            ui.heading(
+                "Is it a throughput unlimited belt-balancer (assumes it is a belt-balancer)?",
+            );
+            ui.horizontal(|ui| {
+                if ui.button("Prove").clicked() {
+                    let graph = self.generate_graph(false);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let entities = self.grid.iter().flatten().flatten().cloned().collect();
+                    let res = model_f(
+                        &graph,
+                        &ctx,
+                        throughput_unlimited(entities),
+                        ModelType::Relaxed,
+                    );
+                    self.proof_state.throughput_unlimited = Some(res);
+                }
+                if let Some(proof_res) = self.proof_state.throughput_unlimited {
+                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                }
+            });
+            ui.label("\n");
+
+            if ui.button("Save svg").clicked() {
+                self.generate_graph(false).to_svg("out.svg").unwrap();
+            }
+            if ui.button("Save reversed svg").clicked() {
+                self.generate_graph(true).to_svg("out.svg").unwrap();
+            }
             ui.label("\n");
         });
 
         /* Show features and current state of project */
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Current state of the project");
-            ui.label("- To work Factorio Verify needs z3 to be installed on your system.");
             ui.label("- Currently only supports belts, underground belts and splitters (with priorities).\n  \
             Side-loading and other constructs taking advantage of a belt being split into two lanes is currently WIP.\n  \
             Read: The analysis will *definetely* be wrong.");
             ui.label("- All belts show as yellow but they are still modelled correctly.\n  \
             Clicking on a belt will show its real throughput (15 for yellow, 30 for red, 45 for blue.");
-            ui.label("- Don't load too big blueprints as they won't fit on the screen.\n  \
-            A zoomable and movable canvas is WIP.");
+            ui.label("- Big blueprints won't fit on the screen.\n  \
+            Use *View > Decrease blueprint size* to zoom out. \
+            A better, zoomable and movable, canvas is WIP.");
             ui.label("- Factorio Verify can prove much more than the automatic proofs above.\n  \
             A custom language to specify own properties is WIP.");
             ui.label("\n  Thank you for testing Factorio Verify and have fun.\n  The factory must grow!");

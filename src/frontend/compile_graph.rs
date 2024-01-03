@@ -1,5 +1,3 @@
-mod compile_entities;
-
 use petgraph::Direction::{Incoming, Outgoing};
 use relations::Relation;
 use std::{
@@ -10,12 +8,12 @@ use std::{
 };
 
 use crate::{
-    entities::{BeltType, Entity, EntityId, Underground},
+    entities::{BeltType, EntityId, FBEntity, FBUnderground, InserterTrait},
     ir::{Edge, FlowGraph, Input, Node, Output},
-    utils::{Direction, Position},
+    utils::{Direction, Position, Side},
 };
 
-use self::compile_entities::AddToGraph;
+use super::compile_entities::AddToGraph;
 
 trait RelationMap<T>
 where
@@ -65,13 +63,13 @@ pub type RelMap<T> = HashMap<T, HashSet<T>>;
 /* XXX: do we really need the entities vector?
  * => remove Rc, get entities with pos_to_entity.values() */
 pub struct Compiler {
-    entities: Vec<Rc<Entity<i32>>>,
+    entities: Vec<Rc<FBEntity<i32>>>,
     positions: HashSet<Position<i32>>,
     belt_positions: HashSet<Position<i32>>,
     inserter_positions: HashSet<Position<i32>>,
     feeds_to: RelMap<Position<i32>>,
     pub feeds_from: RelMap<Position<i32>>,
-    pos_to_entity: HashMap<Position<i32>, Rc<Entity<i32>>>,
+    pos_to_entity: HashMap<Position<i32>, Rc<FBEntity<i32>>>,
 }
 
 struct PostionSets {
@@ -82,16 +80,16 @@ struct PostionSets {
 
 impl Compiler {
     fn generate_pos_to_entity(
-        entities: &Vec<Rc<Entity<i32>>>,
-    ) -> HashMap<Position<i32>, Rc<Entity<i32>>> {
+        entities: &Vec<Rc<FBEntity<i32>>>,
+    ) -> HashMap<Position<i32>, Rc<FBEntity<i32>>> {
         let mut pos_to_entity = entities
             .iter()
-            .filter(|&e| !matches!(**e, Entity::SplitterPhantom(_)))
+            .filter(|&e| !matches!(**e, FBEntity::SplitterPhantom(_)))
             .map(|e| (e.get_base().position, e.clone()))
             .collect::<HashMap<_, _>>();
 
         for e in entities {
-            if let Entity::Splitter(s) = **e {
+            if let FBEntity::Splitter(s) = **e {
                 pos_to_entity.insert(s.get_phantom().base.position, e.clone());
             }
         }
@@ -99,14 +97,14 @@ impl Compiler {
     }
 
     fn generate_position_sets(
-        pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
+        pos_to_entity: &HashMap<Position<i32>, Rc<FBEntity<i32>>>,
     ) -> PostionSets {
         let positions = pos_to_entity.keys().cloned().collect::<HashSet<_>>();
 
         let belt_positions = pos_to_entity
             .iter()
             .filter_map(|(k, v)| match **v {
-                Entity::Belt(_) | Entity::Underground(_) | Entity::Splitter(_) => Some(*k),
+                FBEntity::Belt(_) | FBEntity::Underground(_) | FBEntity::Splitter(_) => Some(*k),
                 _ => None,
             })
             .collect();
@@ -131,21 +129,21 @@ impl Compiler {
     /// This only generates the following relation: {A->C, B->D}.
     /// To perform reachability analysis one would need to also include A->D and B->C.
     pub fn populate_feeds_to(
-        pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
-        entities: &Vec<Rc<Entity<i32>>>,
+        pos_to_entity: &HashMap<Position<i32>, Rc<FBEntity<i32>>>,
+        entities: &Vec<Rc<FBEntity<i32>>>,
     ) -> RelMap<Position<i32>> {
         let mut feeds_to = HashMap::new();
 
         fn add_feeds_to(
             feeds_to: &mut RelMap<Position<i32>>,
-            pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
+            pos_to_entity: &HashMap<Position<i32>, Rc<FBEntity<i32>>>,
             pos: Position<i32>,
             dir: Direction,
         ) {
             let dest = pos.shift(dir, 1);
             if let Some(e) = pos_to_entity.get(&dest) {
                 match **e {
-                    Entity::Belt(_) | Entity::Underground(_) | Entity::Splitter(_) => {
+                    FBEntity::Belt(_) | FBEntity::Underground(_) | FBEntity::Splitter(_) => {
                         feeds_to.add(&pos, pos.shift(dir, 1));
                     }
                     _ => (),
@@ -154,7 +152,7 @@ impl Compiler {
         }
 
         let output_undergrounds = entities.iter().filter_map(|e| match **e {
-            Entity::Underground(x) if x.belt_type == BeltType::Output => Some(e.clone()),
+            FBEntity::Underground(x) if x.belt_type == BeltType::Output => Some(e.clone()),
             _ => None,
         });
 
@@ -163,28 +161,31 @@ impl Compiler {
             let dir = base.direction;
             let pos = base.position;
             match **e {
-                Entity::Belt(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::Underground(u) if u.belt_type == BeltType::Input => {
+                FBEntity::Belt(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                FBEntity::Underground(u) if u.belt_type == BeltType::Input => {
                     if let Some(output_pos) =
                         find_underground_output(&u, output_undergrounds.clone())
                     {
                         feeds_to.add(&pos, output_pos);
                     }
                 }
-                Entity::Underground(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::Splitter(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::SplitterPhantom(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
-                Entity::Inserter(l) => {
+                FBEntity::Underground(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                FBEntity::Splitter(_) => add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir),
+                FBEntity::SplitterPhantom(_) => {
+                    add_feeds_to(&mut feeds_to, pos_to_entity, pos, dir)
+                }
+                FBEntity::Inserter(l) => {
                     let source = l.get_source();
                     let destination = l.get_destination();
                     feeds_to.add(&source, destination);
                 }
-                Entity::LongInserter(l) => {
+                FBEntity::LongInserter(l) => {
                     let source = l.get_source();
                     let destination = l.get_destination();
                     feeds_to.add(&source, destination);
                 }
-                Entity::Assembler(_) => (),
+                FBEntity::Assembler(_) => todo!(),
+                FBEntity::AssemblerPhantom(_) => todo!(),
             };
         }
         /* validate that noting feeds into an output underground except for an input underground */
@@ -193,8 +194,8 @@ impl Compiler {
                 let source_entity = pos_to_entity.get(source);
                 let dest_entity = pos_to_entity.get(dest);
                 if let (Some(source), Some(dest)) = (source_entity, dest_entity) {
-                    let dest_is_output = matches!(**dest, Entity::Underground(x) if x.belt_type == BeltType::Output);
-                    let source_is_input = matches!(**source, Entity::Underground(x) if x.belt_type == BeltType::Input);
+                    let dest_is_output = matches!(**dest, FBEntity::Underground(x) if x.belt_type == BeltType::Output);
+                    let source_is_input = matches!(**source, FBEntity::Underground(x) if x.belt_type == BeltType::Input);
                     return !dest_is_output || source_is_input;
                 }
                 true
@@ -206,15 +207,15 @@ impl Compiler {
     }
 
     pub fn populate_feeds_from(
-        pos_to_entity: &HashMap<Position<i32>, Rc<Entity<i32>>>,
-        entities: &Vec<Rc<Entity<i32>>>,
+        pos_to_entity: &HashMap<Position<i32>, Rc<FBEntity<i32>>>,
+        entities: &Vec<Rc<FBEntity<i32>>>,
     ) -> RelMap<Position<i32>> {
         Self::populate_feeds_to(pos_to_entity, entities).transpose()
     }
 }
 
 impl Compiler {
-    pub fn new(entities: Vec<Entity<i32>>) -> Self {
+    pub fn new(entities: Vec<FBEntity<i32>>) -> Self {
         let entities: Vec<_> = entities.into_iter().map(Rc::new).collect();
         let pos_to_entity = Self::generate_pos_to_entity(&entities);
 
@@ -244,7 +245,7 @@ impl Compiler {
     /// Creates a relation of positions that feed other positions
     ///
     /// Usable to peform reachability analysis.
-    /// ```
+    /// ```text
     ///        __
     ///       |  \
     /// A ->  |   ⟩ -> C
@@ -258,7 +259,7 @@ impl Compiler {
         let mut feeds_to = self.feeds_to.clone();
 
         for e in &self.entities {
-            if let Entity::Splitter(s) = **e {
+            if let FBEntity::Splitter(s) = **e {
                 let base = e.get_base();
                 let pos = base.position;
                 let dir = base.direction;
@@ -301,11 +302,13 @@ impl Compiler {
 
         for e in &self.entities {
             match **e {
-                Entity::Splitter(splitter) => {
+                FBEntity::Splitter(splitter) => {
                     splitter.add_to_graph(&mut graph, &mut pos_to_connector)
                 }
-                Entity::Belt(belt) => belt.add_to_graph(&mut graph, &mut pos_to_connector),
-                Entity::Underground(under) => under.add_to_graph(&mut graph, &mut pos_to_connector),
+                FBEntity::Belt(belt) => belt.add_to_graph(&mut graph, &mut pos_to_connector),
+                FBEntity::Underground(under) => {
+                    under.add_to_graph(&mut graph, &mut pos_to_connector)
+                }
                 _ => (),
             }
         }
@@ -314,7 +317,7 @@ impl Compiler {
                 for dest in set {
                     if let Some(dest_idx) = pos_to_connector.get(dest).map(|i| i.0) {
                         let edge = Edge {
-                            side: None,
+                            side: Side::None,
                             capacity: 69.into(),
                         };
                         graph.add_edge(source_idx, dest_idx, edge);
@@ -347,9 +350,9 @@ impl Compiler {
     }
 }
 
-fn find_underground_output<I>(underground: &Underground<i32>, outputs: I) -> Option<Position<i32>>
+fn find_underground_output<I>(underground: &FBUnderground<i32>, outputs: I) -> Option<Position<i32>>
 where
-    I: Iterator<Item = Rc<Entity<i32>>> + Clone,
+    I: Iterator<Item = Rc<FBEntity<i32>>> + Clone,
 {
     let base = underground.base;
     let pos = base.position;
@@ -383,7 +386,7 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn load(file: &str) -> Vec<Entity<i32>> {
+    fn load(file: &str) -> Vec<FBEntity<i32>> {
         let blueprint_string = fs::read_to_string(file).unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
@@ -437,7 +440,7 @@ mod tests {
         let entities = load("tests/belt_weave");
         let ctx = Compiler::new(entities);
         let mut graph = ctx.create_graph();
-        graph.simplify(&[]);
+        graph.simplify(&[], crate::ir::CoalesceStrength::Aggressive);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
         graph.to_svg("tests/belt_weave.svg").unwrap();

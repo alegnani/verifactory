@@ -1,23 +1,20 @@
+//! Provides functionality to reverse the direction of a [`FlowGraph`].
+
 use petgraph::Graph;
 
-use super::{Connector, Edge, FlowGraph, Input, Merger, Node, Output, Side, Splitter};
+use super::{Connector, Edge, FlowGraph, Input, Merger, Node, Output, Splitter};
+use crate::utils::Side;
 
+/// Trait used to represent that something can be reversed in direction.
+///
+/// This is used to invert the direction of the [`FlowGraph`].
 pub trait Reversable {
     fn reverse(&self) -> Self;
 }
 
 impl Reversable for Side {
     fn reverse(&self) -> Self {
-        match self {
-            Self::Right => Self::Left,
-            Self::Left => Self::Right,
-        }
-    }
-}
-
-impl Reversable for Option<Side> {
-    fn reverse(&self) -> Self {
-        self.map(|s| s.reverse())
+        -*self
     }
 }
 
@@ -32,7 +29,7 @@ impl Reversable for Edge {
 impl Reversable for Node {
     fn reverse(&self) -> Self {
         match self {
-            Node::Connector(c) => Node::Connector(Connector { id: c.id }),
+            Node::Connector(c) => Node::Connector(Connector { ..*c }),
             Node::Input(i) => Node::Output(Output { id: i.id }),
             Node::Output(o) => Node::Input(Input { id: o.id }),
             Node::Merger(m) => Node::Splitter(Splitter {
@@ -51,15 +48,11 @@ impl Reversable for FlowGraph {
     fn reverse(&self) -> Self {
         let mut rev = self.clone();
         Graph::reverse(&mut rev);
-        /* Reverse edge side */
+        // Reverse edge side
         for edge in rev.edge_weights_mut() {
-            if let Some(side) = edge.side {
-                edge.side = Some(match side {
-                    Side::Left => Side::Right,
-                    Side::Right => Side::Left,
-                });
-            }
+            edge.side = edge.side.reverse();
         }
+        // Reverse contents of nodes
         for node in rev.node_weights_mut() {
             *node = node.reverse();
         }
@@ -69,15 +62,19 @@ impl Reversable for FlowGraph {
 
 #[cfg(test)]
 mod test {
-    use crate::{compiler::Compiler, ir::FlowGraphFun, utils::load_entities};
+    use crate::{
+        frontend::Compiler,
+        import::file_to_entities,
+        ir::{CoalesceStrength::Aggressive, FlowGraphFun},
+    };
 
     use super::*;
 
     #[test]
     fn reverse_3_2() {
-        let entities = load_entities("tests/3-2");
+        let entities = file_to_entities("tests/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[3]);
+        graph.simplify(&[3], Aggressive);
         graph.to_svg("tests/3-2-normal.svg").unwrap();
         let rev = graph.reverse();
         rev.to_svg("tests/3-2-rev.svg").unwrap();

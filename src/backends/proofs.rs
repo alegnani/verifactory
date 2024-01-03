@@ -8,9 +8,10 @@ use super::Z3Backend;
 pub trait Z3Proofs {
     fn is_balancer(&self) -> SatResult;
     fn is_equal_drain_balancer(&self) -> SatResult;
+    fn get_counter_example(&self);
 }
 
-trait Negatable {
+pub trait Negatable {
     fn not(self) -> Self;
 }
 
@@ -67,7 +68,6 @@ impl Z3Proofs for Z3Backend {
         ));
 
         let res = solver.check_assumptions(&[out_eq.not()]);
-        println!("{:?}", solver.get_model());
         res.not()
     }
 
@@ -94,25 +94,41 @@ impl Z3Proofs for Z3Backend {
                 ));
 
                 let res = solver.check_assumptions(&[implic.not()]);
-                println!("{:?}", solver.get_model());
                 res.not()
             }
             x => x,
         }
     }
+
+    fn get_counter_example(&self) {
+        match self.get_solver().get_model() {
+            None => None,
+            Some(model) => {
+                // let ast = z3::ast::Ast::Int::new_const(self.get_ctx(), "input4_1");
+                // let inter = model.get_const_interp(&ast);
+                // println!("{:?}", inter);
+                Some(())
+            }
+        };
+        todo!()
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{compiler::Compiler, ir::FlowGraphFun, utils::load_entities};
+    use crate::{
+        frontend::Compiler,
+        import::file_to_entities,
+        ir::{CoalesceStrength::Aggressive, FlowGraphFun},
+    };
 
     use super::*;
 
     #[test]
     fn balancer_3_2() {
-        let entities = load_entities("tests/3-2");
+        let entities = file_to_entities("tests/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[3]);
+        graph.simplify(&[3], Aggressive);
         graph.to_svg("tests/3-2.svg").unwrap();
         let is_balancer = Z3Backend::new(graph).is_balancer();
         assert!(matches!(is_balancer, SatResult::Sat));
@@ -120,9 +136,9 @@ mod test {
 
     #[test]
     fn balancer_3_2_broken() {
-        let entities = load_entities("tests/3-2-broken");
+        let entities = file_to_entities("tests/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[3]);
+        graph.simplify(&[3], Aggressive);
         graph.to_svg("tests/3-2-broken.svg").unwrap();
         let is_balancer = Z3Backend::new(graph).is_balancer();
         assert!(matches!(is_balancer, SatResult::Unsat));
@@ -130,9 +146,9 @@ mod test {
 
     #[test]
     fn balancer_2_4_broken() {
-        let entities = load_entities("tests/2-4-broken");
+        let entities = file_to_entities("tests/2-4-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.simplify(&[2, 7]);
+        graph.simplify(&[2, 7], Aggressive);
         graph.to_svg("tests/2-4-broken.svg").unwrap();
         let is_balancer = Z3Backend::new(graph).is_balancer();
         assert!(matches!(is_balancer, SatResult::Unsat));

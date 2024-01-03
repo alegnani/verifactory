@@ -1,6 +1,8 @@
+#![doc = include_str!("../README.md")]
+
 mod backends;
-mod compiler;
 mod entities;
+mod frontend;
 mod gui;
 mod import;
 mod ir;
@@ -11,7 +13,7 @@ use std::{fs::File, sync::Arc};
 use eframe::NativeOptions;
 use gui::MyApp;
 
-fn main() -> Result<(), eframe::Error> {
+pub fn main() -> Result<(), eframe::Error> {
     let file = File::create("debug.log").unwrap();
     tracing_subscriber::fmt().with_writer(Arc::new(file)).init();
     eframe::run_native(

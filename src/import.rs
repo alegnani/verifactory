@@ -1,21 +1,19 @@
+//! Utility functions to convert a Factorio blueprint string into a list of `FBEntity`s.
+//! A description of the JSON representation of the blueprint string can be found [here](https://wiki.factorio.com/Blueprint_string_format).
+
 use anyhow::{anyhow, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
 use serde::{de::Error, Deserialize, Deserializer};
 use serde_json::Value;
+use std::fs;
 
 use crate::{
-    entities::{
-        Assembler, BaseEntity, Belt, Entity, Inserter, LongInserter, Priority, Splitter,
-        SplitterPhantom, Underground,
-    },
-    utils::{
-        Direction::{self, East, West},
-        Position,
-        Rotation::Anticlockwise,
-    },
+    entities::*,
+    utils::{Direction, Position, Rotation},
 };
 
+/// Decompresses the string such that it can be interpreted as a JSON.
 fn decompress_string(blueprint_string: &str) -> Result<Value> {
     let skip_first_byte = &blueprint_string.as_bytes()[1..blueprint_string.len()];
     let base64_decoded = general_purpose::STANDARD.decode(skip_first_byte)?;
@@ -23,6 +21,7 @@ fn decompress_string(blueprint_string: &str) -> Result<Value> {
     Ok(serde_json::from_slice(&decoded)?)
 }
 
+/// Turns a JSON string into a list of JSON substrings, each representing an entity of the blueprint.
 fn get_json_entities(json: Value) -> Result<Vec<Value>> {
     json.get("blueprint")
         .context("No blueprint key in json")?
@@ -33,7 +32,8 @@ fn get_json_entities(json: Value) -> Result<Vec<Value>> {
         .map(|v| v.to_owned())
 }
 
-impl<'de> Deserialize<'de> for BaseEntity<f64> {
+/// Helper function that deserializes the attributes shared by each entity.
+impl<'de> Deserialize<'de> for FBBaseEntity<f64> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -55,7 +55,7 @@ impl<'de> Deserialize<'de> for BaseEntity<f64> {
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or(Direction::North);
 
-        let base = BaseEntity {
+        let base = FBBaseEntity {
             id,
             position,
             direction,
@@ -65,7 +65,8 @@ impl<'de> Deserialize<'de> for BaseEntity<f64> {
     }
 }
 
-impl<'de> Deserialize<'de> for Entity<f64> {
+/// Deserialization function turning each JSON string into a `FBEntity<f64>`.
+impl<'de> Deserialize<'de> for FBEntity<f64> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -77,7 +78,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
             .and_then(|v| v.as_str())
             .ok_or(Error::missing_field("name"))?;
 
-        let mut base: BaseEntity<f64> = serde_json::from_value(value.clone())
+        let mut base: FBBaseEntity<f64> = serde_json::from_value(value.clone())
             .map_err(|_| Error::custom("Could not deserialize BaseEntity"))?;
         base.throughput = if name.contains("express") {
             45.0
@@ -88,14 +89,14 @@ impl<'de> Deserialize<'de> for Entity<f64> {
         };
 
         if name.contains("transport-belt") {
-            Ok(Self::Belt(Belt { base }))
+            Ok(Self::Belt(FBBelt { base }))
         } else if name.contains("underground-belt") {
             let belt_type = value
                 .get("type")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .ok_or(Error::missing_field("type"))?;
 
-            Ok(Self::Underground(Underground { base, belt_type }))
+            Ok(Self::Underground(FBUnderground { base, belt_type }))
         } else if name.contains("splitter") {
             let input_prio = value
                 .get("input_priority")
@@ -107,7 +108,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or(Priority::None);
 
-            Ok(Self::Splitter(Splitter {
+            Ok(Self::Splitter(FBSplitter {
                 base,
                 input_prio,
                 output_prio,
@@ -115,7 +116,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
         } else if name.contains("inserter") {
             if name.contains("long-handed") {
                 base.throughput = 1.2;
-                return Ok(Self::LongInserter(LongInserter { base }));
+                return Ok(Self::LongInserter(FBLongInserter { base }));
             }
             base.throughput = if name == "inserter" {
                 0.83
@@ -124,7 +125,7 @@ impl<'de> Deserialize<'de> for Entity<f64> {
             } else {
                 2.31
             };
-            Ok(Self::Inserter(Inserter { base }))
+            Ok(Self::Inserter(FBInserter { base }))
         } else if name.contains("assembling-machine") {
             let tier = name
                 .strip_prefix("assembling-machine-")
@@ -137,34 +138,36 @@ impl<'de> Deserialize<'de> for Entity<f64> {
                 "3" => 1.25,
                 _ => panic!(),
             };
-            Ok(Self::Assembler(Assembler { base }))
+            Ok(Self::Assembler(FBAssembler { base }))
         } else {
             Err(format!("Invalid entity: ({})", name)).map_err(serde::de::Error::custom)
         }
     }
 }
 
-fn snap_to_grid(entities: &mut [Entity<f64>]) {
+/// Some entities like splitters have their coordinates that are not integers.
+/// This function snaps these coordinates to an integer coordinate system.
+fn snap_to_grid(entities: &mut [FBEntity<f64>]) {
     for e in entities {
         match e {
             /* snap splitters to the grid as they are offset by 0.5 */
-            Entity::Splitter(splitter) => {
-                let shift_dir = splitter.base.direction.rotate(Anticlockwise, 1);
+            FBEntity::Splitter(splitter) => {
+                let shift_dir = splitter.base.direction.rotate(Rotation::Anticlockwise, 1);
                 /* in Factorio blueprints the y-axis is inverted */
                 let shift_dir = match shift_dir {
-                    East => West,
-                    West => East,
+                    Direction::East => Direction::West,
+                    Direction::West => Direction::East,
                     x => x,
                 };
-                splitter.base.shift_mut(shift_dir, 0.5);
+                splitter.base.shift(shift_dir, 0.5);
             }
             /* flip direction of inserters */
-            Entity::Inserter(inserter) => {
+            FBEntity::Inserter(inserter) => {
                 let dir = inserter.base.direction;
                 inserter.base.direction = dir.flip();
             }
             /* flip direction of long inserters */
-            Entity::LongInserter(inserter) => {
+            FBEntity::LongInserter(inserter) => {
                 let dir = inserter.base.direction;
                 inserter.base.direction = dir.flip();
             }
@@ -173,7 +176,9 @@ fn snap_to_grid(entities: &mut [Entity<f64>]) {
     }
 }
 
-fn normalize_entities(entities: &[Entity<f64>]) -> Vec<Entity<i32>> {
+/// Constrains all the coordinates of the `FBEntity`s to be >= 0.
+/// Additionally adds phantoms for entities that occupy multiple tiles like splitters or assemblers.
+fn normalize_entities(entities: &[FBEntity<f64>]) -> Vec<FBEntity<i32>> {
     let padding = 2.0;
     let max_y = entities
         .iter()
@@ -195,33 +200,41 @@ fn normalize_entities(entities: &[Entity<f64>]) -> Vec<Entity<i32>> {
             /* uninvert the y-axis */
             let y = (max_y - base.position.y) as i32;
             let position = Position { x, y };
-            let base = BaseEntity {
+            let base = FBBaseEntity {
                 position,
                 id: base.id,
                 direction: base.direction,
                 throughput: base.throughput,
             };
             match e {
-                Entity::Belt(_) => Entity::Belt(Belt { base }),
-                Entity::Underground(u) => Entity::Underground(Underground {
+                FBEntity::Belt(_) => FBEntity::Belt(FBBelt { base }),
+                FBEntity::Underground(u) => FBEntity::Underground(FBUnderground {
                     base,
                     belt_type: u.belt_type,
                 }),
-                Entity::Splitter(s) => Entity::Splitter(Splitter {
+                FBEntity::Splitter(s) => FBEntity::Splitter(FBSplitter {
                     base,
                     input_prio: s.input_prio,
                     output_prio: s.output_prio,
                 }),
-                Entity::SplitterPhantom(_) => Entity::SplitterPhantom(SplitterPhantom { base }),
-                Entity::Inserter(_) => Entity::Inserter(Inserter { base }),
-                Entity::LongInserter(_) => Entity::LongInserter(LongInserter { base }),
-                Entity::Assembler(_) => Entity::Assembler(Assembler { base }),
+                FBEntity::SplitterPhantom(_) => {
+                    FBEntity::SplitterPhantom(FBSplitterPhantom { base })
+                }
+                FBEntity::Inserter(_) => FBEntity::Inserter(FBInserter { base }),
+                FBEntity::LongInserter(_) => FBEntity::LongInserter(FBLongInserter { base }),
+                FBEntity::Assembler(_) => FBEntity::Assembler(FBAssembler { base }),
+                FBEntity::AssemblerPhantom(_) => {
+                    FBEntity::AssemblerPhantom(FBAssemblerPhantom { base })
+                }
             }
         })
         .collect()
 }
 
-pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<Entity<i32>>> {
+/// Parses a blueprint string, as exported from Factorio, to a list of `FBEntity`s
+///
+/// Unsupported entities, like power poles, are skipped.
+pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> {
     let json = decompress_string(blueprint_string)?;
     let mut entities: Vec<_> = get_json_entities(json)?
         .into_iter()
@@ -231,16 +244,36 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<Entity<i32>>> {
     snap_to_grid(&mut entities);
     let mut entities = normalize_entities(&entities);
 
-    /* add splitter phantoms */
+    // add splitter phantoms
     let phantoms = entities
         .iter()
         .filter_map(|&e| match e {
-            Entity::Splitter(s) => Some(Entity::SplitterPhantom(s.get_phantom())),
+            FBEntity::Splitter(s) => Some(FBEntity::SplitterPhantom(s.get_phantom())),
             _ => None,
         })
         .collect::<Vec<_>>();
     entities.extend(phantoms);
+
+    // add assembler phantoms
+    let phantoms = entities
+        .iter()
+        .filter_map(|&e| match e {
+            FBEntity::Assembler(a) => Some(a.get_phantoms()),
+            _ => None,
+        })
+        .flatten()
+        .map(FBEntity::AssemblerPhantom)
+        .collect::<Vec<_>>();
+    entities.extend(phantoms);
     Ok(entities)
+}
+
+/// Parses a file containing a blueprint string to a list of `FBEntity`s.
+///
+/// Unsupported entities, like power poles, are skipped.
+pub fn file_to_entities(file: &str) -> Result<Vec<FBEntity<i32>>> {
+    let blueprint_string = fs::read_to_string(file)?;
+    string_to_entities(&blueprint_string)
 }
 
 #[cfg(test)]
@@ -252,12 +285,12 @@ mod tests {
 
     use super::*;
     use std::fs;
-    fn get_belt_entities() -> Vec<Entity<i32>> {
+    fn get_belt_entities() -> Vec<FBEntity<i32>> {
         let blueprint_string = fs::read_to_string("tests/belts").unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
 
-    fn get_assembly_entities() -> Vec<Entity<i32>> {
+    fn get_assembly_entities() -> Vec<FBEntity<i32>> {
         let blueprint_string = fs::read_to_string("tests/inserter_assembler").unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
@@ -271,14 +304,14 @@ mod tests {
             let index = (e.get_base().throughput / 15.0 - 1.0) as usize;
             throughput[index] += 1;
         }
-        assert_eq!(throughput, [3, 4, 1]);
+        assert_eq!(throughput, [4, 5, 1]);
     }
 
     #[test]
     fn belt_direction() {
         let entities = get_belt_entities();
         for e in entities {
-            if let Entity::Belt(b) = e {
+            if let FBEntity::Belt(b) = e {
                 let throughput = b.base.throughput;
                 match b.base.direction {
                     Direction::North => assert_eq!(throughput, 30.0),
@@ -293,7 +326,7 @@ mod tests {
     fn splitter_prio() {
         let entities = get_belt_entities();
         for e in entities {
-            if let Entity::Splitter(s) = e {
+            if let FBEntity::Splitter(s) = e {
                 if s.input_prio == Priority::None {
                     assert_eq!(s.output_prio, Priority::Left);
                 } else {
@@ -308,7 +341,7 @@ mod tests {
     fn underground_type() {
         let entities = get_belt_entities();
         for e in entities {
-            if let Entity::Underground(u) = e {
+            if let FBEntity::Underground(u) = e {
                 if u.base.position.y == 2 {
                     assert_eq!(u.belt_type, BeltType::Input);
                 } else {
@@ -322,7 +355,7 @@ mod tests {
     fn inserters_tier() {
         let entities = get_assembly_entities();
         for e in entities {
-            if let Entity::Inserter(i) = e {
+            if let FBEntity::Inserter(i) = e {
                 let throughput = i.base.throughput;
                 match i.base.direction {
                     Direction::North => assert_eq!(throughput, 2.31),
@@ -337,7 +370,7 @@ mod tests {
     fn long_inserter() {
         let entities = get_assembly_entities();
         for e in entities {
-            if let Entity::LongInserter(l) = e {
+            if let FBEntity::LongInserter(l) = e {
                 assert_eq!(l.base.direction, Direction::South);
                 assert_eq!(l.base.throughput, 1.2);
             }
@@ -347,10 +380,12 @@ mod tests {
     #[test]
     fn assembler() {
         let entities = get_assembly_entities();
-        for e in entities {
-            if let Entity::Assembler(a) = e {
+        for e in &entities {
+            if let FBEntity::Assembler(a) = e {
                 assert_eq!(a.base.throughput, 1.25);
             }
         }
+        println!("{:?}", &entities);
+        assert_eq!(entities.len(), 9 + 3);
     }
 }
