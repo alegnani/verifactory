@@ -336,13 +336,14 @@ mod tests {
 
     use super::*;
     use crate::backends::Printable;
+    use crate::ir::CoalesceStrength;
     use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
     #[test]
-    fn is_throughput_unlimited() {
+    fn is_throughput_unlimited_4_4() {
         let entities = file_to_entities("tests/4-4-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
-        graph.simplify(&[], crate::ir::CoalesceStrength::Lossless);
+        graph.simplify(&[], CoalesceStrength::Aggressive);
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(
@@ -356,10 +357,44 @@ mod tests {
     }
 
     #[test]
-    fn not_throughput_unlimited() {
+    fn not_throughput_unlimited_4_4() {
         let entities = file_to_entities("tests/4-4-ntu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
-        graph.simplify(&[], crate::ir::CoalesceStrength::Lossless);
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelType::Relaxed,
+        );
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Unsat));
+    }
+
+    #[test]
+    fn is_throughput_unlimited_6_3() {
+        let entities = file_to_entities("tests/6-3-tu").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[24, 36, 44], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelType::Relaxed,
+        );
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn not_throughput_unlimited_6_3() {
+        let entities = file_to_entities("tests/6-3-ntu").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[25, 26], CoalesceStrength::Aggressive);
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(
