@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "<=1.0.171"
 base64 = "0.21.2"
+bitflags = "2.4.1"
 eframe = "0.24.1"
 egui = "0.24.1"
 egui-toast = "0.10.1"

@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::{collections::HashMap, mem};
 use z3::{
@@ -7,15 +8,9 @@ use z3::{
 
 use crate::{entities::FBEntity, ir::FlowGraph};
 
-use super::{
-    model_entities_blocked::{Z3EdgeBlocked, Z3NodeBlocked},
-    proofs::Negatable,
-};
+use super::proofs::Negatable;
 
-use super::{
-    model_entities::{Z3Edge, Z3Node},
-    model_entities_relaxed::{Z3EdgeRelaxed, Z3NodeRelaxed},
-};
+use super::model_entities::{Z3Edge, Z3Node};
 
 #[derive(Default)]
 pub struct Z3QuantHelper<'a> {
@@ -55,18 +50,15 @@ pub struct ProofPrimitives<'a> {
     pub blocking_constraint: Vec<Bool<'a>>,
 }
 
-pub enum ModelType {
-    Normal,
-    Relaxed,
-    Blocked,
+bitflags! {
+    #[derive(Clone, Copy)]
+    pub struct ModelFlags: u8 {
+        const Relaxed = 1;
+        const Blocked = 1 << 1;
+    }
 }
 
-pub fn model_f<'a, F>(
-    graph: &'a FlowGraph,
-    ctx: &'a Context,
-    f: F,
-    model_type: ModelType,
-) -> SatResult
+pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F, flags: ModelFlags) -> SatResult
 where
     F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
 {
@@ -76,20 +68,12 @@ where
     // encode edges as variables in z3
     for edge_idx in graph.edge_indices() {
         let edge = graph[edge_idx];
-        match model_type {
-            ModelType::Normal => edge.model(graph, edge_idx, ctx, &mut helper),
-            ModelType::Relaxed => edge.model_relaxed(graph, edge_idx, ctx, &mut helper),
-            ModelType::Blocked => edge.model_blocked(graph, edge_idx, ctx, &mut helper),
-        }
+        edge.model(graph, edge_idx, ctx, &mut helper, flags);
     }
     // encode nodes as equations
     for node_idx in graph.node_indices() {
         let node = &graph[node_idx];
-        match model_type {
-            ModelType::Normal => node.model(graph, node_idx, ctx, &mut helper),
-            ModelType::Relaxed => node.model_relaxed(graph, node_idx, ctx, &mut helper),
-            ModelType::Blocked => node.model_blocked(graph, node_idx, ctx, &mut helper),
-        }
+        node.model(graph, node_idx, ctx, &mut helper, flags);
     }
 
     // add stuff to solver
@@ -344,7 +328,7 @@ mod tests {
         graph.simplify(&[4, 5, 6], CoalesceStrength::Aggressive);
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Unsat));
     }
@@ -356,7 +340,7 @@ mod tests {
         graph.simplify(&[3], CoalesceStrength::Aggressive);
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Sat));
     }
@@ -372,7 +356,7 @@ mod tests {
             &graph,
             &ctx,
             throughput_unlimited(entities),
-            ModelType::Relaxed,
+            ModelFlags::Relaxed,
         );
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Sat));
@@ -389,7 +373,7 @@ mod tests {
             &graph,
             &ctx,
             throughput_unlimited(entities),
-            ModelType::Relaxed,
+            ModelFlags::Relaxed,
         );
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Unsat));
@@ -406,7 +390,7 @@ mod tests {
             &graph,
             &ctx,
             throughput_unlimited(entities),
-            ModelType::Relaxed,
+            ModelFlags::Relaxed,
         );
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Sat));
@@ -423,7 +407,7 @@ mod tests {
             &graph,
             &ctx,
             throughput_unlimited(entities),
-            ModelType::Relaxed,
+            ModelFlags::Relaxed,
         );
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Unsat));

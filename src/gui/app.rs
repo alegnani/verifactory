@@ -10,7 +10,7 @@ use z3::{Config, Context, SatResult};
 
 use crate::{
     backends::{
-        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, ModelType, Printable,
+        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, ModelFlags, Printable,
     },
     entities::{EntityId, FBEntity},
     frontend::{Compiler, RelMap},
@@ -268,7 +268,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(false);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+                    let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
                     self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
@@ -284,7 +284,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(true);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, equal_drain_f, ModelType::Normal);
+                    let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
                     self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
@@ -307,7 +307,7 @@ impl eframe::App for MyApp {
                         &graph,
                         &ctx,
                         throughput_unlimited(entities),
-                        ModelType::Relaxed,
+                        ModelFlags::Relaxed,
                     );
                     self.proof_state.throughput_unlimited = Some(res);
                 }
