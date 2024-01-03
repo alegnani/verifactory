@@ -9,7 +9,9 @@ use egui_toast::{Toast, ToastOptions, Toasts};
 use z3::{Config, Context, SatResult};
 
 use crate::{
-    backends::{belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, Printable},
+    backends::{
+        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, ModelType, Printable,
+    },
     entities::{EntityId, FBEntity},
     frontend::{Compiler, RelMap},
     import::string_to_entities,
@@ -139,7 +141,7 @@ impl MyApp {
 
         println!("Remove list: {:?}", removed);
 
-        graph.simplify(&removed, CoalesceStrength::Lossless);
+        graph.simplify(&removed, CoalesceStrength::Aggressive);
         let graph = if reversed {
             Reversable::reverse(&graph)
         } else {
@@ -266,7 +268,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(false);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, belt_balancer_f, false);
+                    let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
                     self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
@@ -282,7 +284,7 @@ impl eframe::App for MyApp {
                     let graph = self.generate_graph(true);
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, equal_drain_f, false);
+                    let res = model_f(&graph, &ctx, equal_drain_f, ModelType::Normal);
                     self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
@@ -301,13 +303,26 @@ impl eframe::App for MyApp {
                     let cfg = Config::new();
                     let ctx = Context::new(&cfg);
                     let entities = self.grid.iter().flatten().flatten().cloned().collect();
-                    let res = model_f(&graph, &ctx, throughput_unlimited(entities), true);
+                    let res = model_f(
+                        &graph,
+                        &ctx,
+                        throughput_unlimited(entities),
+                        ModelType::Relaxed,
+                    );
                     self.proof_state.throughput_unlimited = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.throughput_unlimited {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
+            ui.label("\n");
+
+            if ui.button("Save svg").clicked() {
+                self.generate_graph(false).to_svg("out.svg").unwrap();
+            }
+            if ui.button("Save reversed svg").clicked() {
+                self.generate_graph(true).to_svg("out.svg").unwrap();
+            }
             ui.label("\n");
         });
 

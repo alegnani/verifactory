@@ -56,7 +56,7 @@ impl Z3NodeBlocked for Connector {
         let blocked_out = helper.blocked_edge_map.get(&out_idx).unwrap();
 
         let ast = blocked_in.iff(blocked_out);
-        helper.others.push(ast);
+        helper.blocking.push(ast);
     }
 }
 
@@ -123,7 +123,7 @@ impl Z3NodeBlocked for Merger {
             &Bool::and(ctx, &[blocked_in_1, blocked_in_2]),
             &Bool::or(ctx, &[blocked_in_1, blocked_in_2]).not(),
         );
-        helper.others.push(ast);
+        helper.blocking.push(ast);
     }
 }
 
@@ -156,28 +156,44 @@ impl Z3NodeBlocked for Splitter {
         // otherwise, don't block the input
         let ast =
             Bool::and(ctx, &[blocked_out_1, blocked_out_2]).ite(blocked_in, &blocked_in.not());
-        helper.others.push(ast);
+        helper.blocking.push(ast);
     }
 }
 
 pub trait Z3EdgeBlocked {
-    fn model_blocked<'a>(&self, idx: EdgeIndex, ctx: &'a Context, helper: &mut Z3QuantHelper<'a>);
+    fn model_blocked<'a>(
+        &self,
+        graph: &FlowGraph,
+        idx: EdgeIndex,
+        ctx: &'a Context,
+        helper: &mut Z3QuantHelper<'a>,
+    );
 }
 
 impl Z3EdgeBlocked for Edge {
-    fn model_blocked<'a>(&self, idx: EdgeIndex, ctx: &'a Context, helper: &mut Z3QuantHelper<'a>) {
-        self.model(idx, ctx, helper);
+    fn model_blocked<'a>(
+        &self,
+        graph: &FlowGraph,
+        idx: EdgeIndex,
+        ctx: &'a Context,
+        helper: &mut Z3QuantHelper<'a>,
+    ) {
+        self.model(graph, idx, ctx, helper);
 
         // add `blocked` constraint to each edge in the model
         let edge = helper.edge_map.get(&idx).unwrap();
         let zero = Real::from_real(ctx, 0, 1);
 
-        let blocked_name = format!("blocked_{}", idx.index());
+        let (src, dst) = graph.edge_endpoints(idx).unwrap();
+        let (src_id, dst_id) = (graph[src].get_str(), graph[dst].get_str());
+
+        let blocked_name = format!("blocked_{}_{}_{}", src_id, dst_id, idx.index());
         let blocked = Bool::new_const(ctx, blocked_name);
         let blocked_capacity = blocked.implies(&edge._eq(&zero));
 
         helper.blocked_edge_map.insert(idx, blocked);
 
+        // Maybe this should not be blocking but others?
         helper.others.push(blocked_capacity);
     }
 }

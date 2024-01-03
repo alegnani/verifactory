@@ -1,12 +1,12 @@
 #![doc = include_str!("../README.md")]
 
-pub mod backends;
-pub mod entities;
-pub mod frontend;
-pub mod gui;
-pub mod import;
-pub mod ir;
-pub mod utils;
+mod backends;
+mod entities;
+mod frontend;
+mod gui;
+mod import;
+mod ir;
+mod utils;
 
 use std::{fs::File, sync::Arc};
 

@@ -14,7 +14,10 @@ use crate::{
     ir::FlowGraph,
 };
 
-use super::model_entities::{Z3Edge, Z3Node};
+use super::{
+    model_entities::{Z3Edge, Z3Node},
+    model_entities_relaxed::{Z3EdgeRelaxed, Z3NodeRelaxed},
+};
 
 #[derive(Default)]
 pub struct Z3QuantHelper<'a> {
@@ -26,6 +29,7 @@ pub struct Z3QuantHelper<'a> {
     pub blocked_edge_map: HashMap<EdgeIndex, Bool<'a>>,
     pub blocked_input_map: HashMap<NodeIndex, Bool<'a>>,
     pub blocked_output_map: HashMap<NodeIndex, Bool<'a>>,
+    pub blocking: Vec<Bool<'a>>,
 }
 
 pub struct ProofPrimitives<'a> {
@@ -49,9 +53,22 @@ pub struct ProofPrimitives<'a> {
     pub edge_bounds: Vec<Real<'a>>,
     /// constraints like kirchhoffs law or implementation of splitters
     pub model_constraint: Bool<'a>,
+    /// blocking constraints
+    pub blocking_constraint: Vec<Bool<'a>>,
 }
 
-pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F, blocked: bool) -> SatResult
+pub enum ModelType {
+    Normal,
+    Relaxed,
+    Blocked,
+}
+
+pub fn model_f<'a, F>(
+    graph: &'a FlowGraph,
+    ctx: &'a Context,
+    f: F,
+    model_type: ModelType,
+) -> SatResult
 where
     F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
 {
@@ -61,19 +78,19 @@ where
     // encode edges as variables in z3
     for edge_idx in graph.edge_indices() {
         let edge = graph[edge_idx];
-        if blocked {
-            edge.model_blocked(edge_idx, ctx, &mut helper);
-        } else {
-            edge.model(edge_idx, ctx, &mut helper);
+        match model_type {
+            ModelType::Normal => edge.model(graph, edge_idx, ctx, &mut helper),
+            ModelType::Relaxed => edge.model_relaxed(graph, edge_idx, ctx, &mut helper),
+            ModelType::Blocked => edge.model_blocked(graph, edge_idx, ctx, &mut helper),
         }
     }
     // encode nodes as equations
     for node_idx in graph.node_indices() {
         let node = &graph[node_idx];
-        if blocked {
-            node.model_blocked(graph, node_idx, ctx, &mut helper);
-        } else {
-            node.model(graph, node_idx, ctx, &mut helper);
+        match model_type {
+            ModelType::Normal => node.model(graph, node_idx, ctx, &mut helper),
+            ModelType::Relaxed => node.model_relaxed(graph, node_idx, ctx, &mut helper),
+            ModelType::Blocked => node.model_blocked(graph, node_idx, ctx, &mut helper),
         }
     }
 
@@ -92,6 +109,8 @@ where
 
     let model_constraint = vec_and(ctx, &helper.others);
 
+    let blocking_constraint = helper.blocking;
+
     let primitives = ProofPrimitives {
         ctx,
         graph,
@@ -103,13 +122,14 @@ where
         blocked_output_map,
         edge_bounds,
         model_constraint,
+        blocking_constraint,
     };
 
     solver.assert(&f(primitives));
     let res = solver.check().not();
     // TODO: move to tracing
-    println!("{:?}", solver);
-    println!("{:?}", solver.get_model());
+    println!("Solver:\n{:?}", solver);
+    println!("Model:\n{:?}", solver.get_model());
     res
 }
 
@@ -227,11 +247,16 @@ pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 /// TODO: fill
 ///
 /// To prove:
-/// forall inputs. exist edges. s.t. the model is satisfied and inputs_sum <= output_cap
-/// prove the inverse:
-/// not forall inputs. exists edges. s.t. the model is satisfied
-/// exists inputs. not exists edges. s.t. the model is satisfied
-/// exists inputs. forall edges. the model is NOT satisfied
+/// ```text
+/// forall inputs, outputs. in_out_eq -> exist edges. model holds
+/// ```
+/// Find a counterexample:
+/// ```text
+/// not forall inputs, outputs. in_out_eq -> exist edges. model holds
+/// not forall inputs, outputs. not in_out_eq or exist edges. model holds
+/// exist inputs, outputs. in_out_eq and not exist edges. model holds
+/// inputs, outputs. in_out_eq and forall edges. model does NOT hold
+/// ```
 pub fn throughput_unlimited<'a>(
     entities: Vec<FBEntity<i32>>,
 ) -> impl Fn(ProofPrimitives<'a>) -> Bool<'a> {
@@ -258,32 +283,92 @@ pub fn throughput_unlimited<'a>(
             .collect::<Vec<_>>();
         let input_condition = vec_and(p.ctx, &input_constraints);
 
-        let all_edges = forall_const(
-            p.ctx,
-            &p.edge_bounds
-                .iter()
-                .map(|e| e as &dyn Ast)
-                .collect::<Vec<_>>(),
-            &[],
-            &p.model_constraint.not(),
-        );
-        let all_outputs = forall_const(
-            p.ctx,
-            &p.output_bounds
-                .iter()
-                .map(|e| e as &dyn Ast)
-                .collect::<Vec<_>>(),
-            &[],
-            &all_edges,
-        );
-        // Don't block any outputs
-        let outputs = p.blocked_output_map.values().collect::<Vec<_>>();
-        let not_blocked_output = Bool::or(p.ctx, &outputs).not();
+        let zero = Real::from_int(&zero);
+        // `output_condition` adds the following constraint to all outputs (0 <= output <= capacity)
+        let output_constraints = p
+            .output_map
+            .iter()
+            .map(|(idx, v)| {
+                let lower = v.ge(&zero);
+
+                let entity_id = p.graph[*idx].get_id();
+                let capacity = entities
+                    .iter()
+                    .find(|e| e.get_base().id == entity_id)
+                    .unwrap()
+                    .get_base()
+                    .throughput as i64;
+                let upper_const = Real::from_int(&Int::from_i64(p.ctx, capacity));
+                let upper = v.le(&upper_const);
+                Bool::and(p.ctx, &[&lower, &upper])
+            })
+            .collect::<Vec<_>>();
+        let output_condition = vec_and(p.ctx, &output_constraints);
+
+        let outputs = p.output_map.values().collect::<Vec<_>>();
+        let output_sum = Real::add(p.ctx, &outputs);
+
+        let inputs = p.input_map.values().collect::<Vec<_>>();
+        let input_sum = Real::from_int(&Int::add(p.ctx, &inputs));
+
+        let in_out_eq = input_sum._eq(&output_sum);
+
+        // Model edge throughput as existentially quantified variables
+        let cast_edge_bounds = p
+            .edge_bounds
+            .iter()
+            .map(|r| r as &dyn Ast)
+            .collect::<Vec<_>>();
+
+        let no_model = forall_const(p.ctx, &cast_edge_bounds, &[], &p.model_constraint.not());
 
         Bool::and(
             p.ctx,
-            &[&input_condition, &all_outputs, &not_blocked_output],
+            &[&input_condition, &output_condition, &in_out_eq, &no_model],
         )
     };
     i
+}
+
+#[cfg(test)]
+mod tests {
+    use z3::Config;
+
+    use super::*;
+    use crate::backends::Printable;
+    use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
+
+    #[test]
+    fn is_throughput_unlimited() {
+        let entities = file_to_entities("tests/4-4-tu").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[], crate::ir::CoalesceStrength::Lossless);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelType::Relaxed,
+        );
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn not_throughput_unlimited() {
+        let entities = file_to_entities("tests/4-4-ntu").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[], crate::ir::CoalesceStrength::Lossless);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelType::Relaxed,
+        );
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Unsat));
+    }
 }

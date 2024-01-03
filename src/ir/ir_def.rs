@@ -40,6 +40,17 @@ impl Node {
             Node::Splitter(s) => s.id,
         }
     }
+
+    pub fn get_str(&self) -> String {
+        let prefix = match self {
+            Node::Connector(_) => "c",
+            Node::Input(_) => "i",
+            Node::Merger(_) => "m",
+            Node::Output(_) => "o",
+            Node::Splitter(_) => "s",
+        };
+        format!("{}{}", prefix, self.get_id())
+    }
 }
 
 /// Element that merges two inputs into a single output, optionally prioritizing one side.

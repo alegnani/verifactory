@@ -97,7 +97,7 @@ impl Z3Node for Input {
         helper: &mut Z3QuantHelper<'a>,
     ) {
         /* create new input variable */
-        let input_name = format!("input{}_{}", idx.index(), self.id);
+        let input_name = format!("input_{}", self.id);
         let input = Int::new_const(ctx, input_name);
         let input_real = Real::from_int(&input);
         helper.input_map.insert(idx, input);
@@ -120,7 +120,7 @@ impl Z3Node for Output {
         helper: &mut Z3QuantHelper<'a>,
     ) {
         /* create new output variable */
-        let output_name = format!("output{}", idx.index());
+        let output_name = format!("output_{}", self.id);
         let output = Real::new_const(ctx, output_name);
 
         /* kirchhoff on output and in-edge */
@@ -215,15 +215,31 @@ impl Splitter {
 }
 
 pub trait Z3Edge {
-    fn model<'a>(&self, idx: EdgeIndex, ctx: &'a Context, helper: &mut Z3QuantHelper<'a>);
+    fn model<'a>(
+        &self,
+        graph: &FlowGraph,
+        idx: EdgeIndex,
+        ctx: &'a Context,
+        helper: &mut Z3QuantHelper<'a>,
+    );
 }
 
 impl Z3Edge for Edge {
-    fn model<'a>(&self, idx: EdgeIndex, ctx: &'a Context, helper: &mut Z3QuantHelper<'a>) {
+    fn model<'a>(
+        &self,
+        graph: &FlowGraph,
+        idx: EdgeIndex,
+        ctx: &'a Context,
+        helper: &mut Z3QuantHelper<'a>,
+    ) {
         let numer = *self.capacity.numer().unwrap() as i32;
         let denom = *self.capacity.denom().unwrap() as i32;
         let capacity = Real::from_real(ctx, numer, denom);
-        let edge_name = format!("edge_{}", idx.index());
+
+        let (src, dst) = graph.edge_endpoints(idx).unwrap();
+        let (src_id, dst_id) = (graph[src].get_str(), graph[dst].get_str());
+
+        let edge_name = format!("edge_{}_{}_{}", src_id, dst_id, idx.index());
         let edge = Real::new_const(ctx, edge_name);
         let zero = Real::from_real(ctx, 0, 1);
 
