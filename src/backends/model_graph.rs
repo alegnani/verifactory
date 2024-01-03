@@ -110,7 +110,7 @@ where
     solver.assert(&f(primitives));
     let res = solver.check().not();
     // TODO: move to tracing
-    println!("Solver:\n{:?}", solver);
+    // println!("Solver:\n{:?}", solver);
     println!("Model:\n{:?}", solver.get_model());
     res
 }
@@ -292,6 +292,26 @@ pub fn throughput_unlimited<'a>(
     i
 }
 
+/// input, output, blocked. BLOCKING, MODEL and not OUT_EQ
+pub fn universal_balancer(p: ProofPrimitives<'_>) -> Bool<'_> {
+    let eq_value = Real::new_const(p.ctx, "output_value");
+    let outputs_eq_value = p
+        .output_map
+        .iter()
+        .map(|(idx, output)| {
+            let is_blocked = p.blocked_output_map.get(idx).unwrap();
+            is_blocked.not().implies(&output._eq(&eq_value))
+        })
+        .collect::<Vec<_>>();
+    let out_eq = vec_and(p.ctx, &outputs_eq_value);
+    let out_eq_condition = exists_const(p.ctx, &[&eq_value], &[], &out_eq);
+    let blocking_p = vec_and(p.ctx, &p.blocking_constraint);
+    Bool::and(
+        p.ctx,
+        &[&blocking_p, &p.model_constraint, &out_eq_condition.not()],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use z3::Config;
@@ -389,6 +409,33 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Unsat));
+    }
+
+    #[test]
+    fn is_universal_4_4_univ() {
+        let entities = file_to_entities("tests/4-4-univ").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(
+            &[30, 33, 83, 55, 17, 46, 133, 71],
+            CoalesceStrength::Aggressive,
+        );
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn not_universal_4_4() {
+        let entities = file_to_entities("tests/4-4-tu").unwrap();
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Unsat));
     }

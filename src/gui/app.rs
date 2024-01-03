@@ -3,14 +3,15 @@ use std::{
     path::PathBuf,
 };
 
-use egui::{Align2, Direction, Event};
+use egui::{Align2, Direction, Event, Key};
 use egui_file::FileDialog;
 use egui_toast::{Toast, ToastOptions, Toasts};
 use z3::{Config, Context, SatResult};
 
 use crate::{
     backends::{
-        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, ModelFlags, Printable,
+        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, universal_balancer,
+        ModelFlags, Printable,
     },
     entities::{EntityId, FBEntity},
     frontend::{Compiler, RelMap},
@@ -80,6 +81,7 @@ pub struct ProofState {
     balancer: Option<SatResult>,
     equal_drain: Option<SatResult>,
     throughput_unlimited: Option<SatResult>,
+    universal: Option<SatResult>,
 }
 
 pub type EntityGrid = Vec<Vec<Option<FBEntity<i32>>>>;
@@ -315,6 +317,22 @@ impl eframe::App for MyApp {
                     ui.label(format!("Proof result: {}", proof_res.to_str()));
                 }
             });
+            ui.label("\n");
+
+            ui.heading("Is it a universal belt-balancer?");
+            ui.horizontal(|ui| {
+                if ui.button("Prove").clicked() {
+                    let graph = self.generate_graph(false);
+                    let cfg = Config::new();
+                    let ctx = Context::new(&cfg);
+                    let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
+                    self.proof_state.universal = Some(res);
+                }
+                if let Some(proof_res) = self.proof_state.universal {
+                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                }
+            });
+
             ui.label("\n");
 
             if ui.button("Save svg").clicked() {
