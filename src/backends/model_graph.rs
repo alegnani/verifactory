@@ -5,13 +5,11 @@ use z3::{
     Context, SatResult, Solver,
 };
 
-use crate::{
-    backends::{
-        proofs::Negatable,
-        z3_quant::model_entities_blocked::{Z3EdgeBlocked, Z3NodeBlocked},
-    },
-    entities::FBEntity,
-    ir::FlowGraph,
+use crate::{entities::FBEntity, ir::FlowGraph};
+
+use super::{
+    model_entities_blocked::{Z3EdgeBlocked, Z3NodeBlocked},
+    proofs::Negatable,
 };
 
 use super::{
@@ -338,6 +336,30 @@ mod tests {
     use crate::backends::Printable;
     use crate::ir::CoalesceStrength;
     use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
+
+    #[test]
+    fn is_balancer_3_2_broken() {
+        let entities = file_to_entities("tests/3-2-broken").unwrap();
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[4, 5, 6], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Unsat));
+    }
+
+    #[test]
+    fn is_balancer_4_4() {
+        let entities = file_to_entities("tests/4-4").unwrap();
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[3], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelType::Normal);
+        println!("Result: {}", res.to_str());
+        assert!(matches!(res, SatResult::Sat));
+    }
 
     #[test]
     fn is_throughput_unlimited_4_4() {
