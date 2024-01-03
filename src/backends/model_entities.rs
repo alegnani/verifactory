@@ -213,7 +213,6 @@ impl Z3Node for Splitter {
 
         if flags.contains(ModelFlags::Relaxed) {
             // skip the splitter condition
-            return;
         } else if flags.contains(ModelFlags::Blocked) {
             // add `blocked` constraint to [`Splitter`]
             let in_idx = graph.in_edge_idx(idx)[0];

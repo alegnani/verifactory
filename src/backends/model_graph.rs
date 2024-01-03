@@ -141,33 +141,11 @@ where
 /// Belt balancer: Blueprint that taking every possible combination of inputs produces equal outputs.
 ///
 /// The `balancer_condition` states that all the outputs have the same value.
-/// The `model_condition` states that the z3 model is modelled correctly and that the `balancer condition` is NOT met.
-/// This is used to find a counter-example.
-/// Additionally the `trivial` constraint is added that constraints all inputs and outputs to be positive.
+/// Finding values s.t. the model is satisfied and output equality is not achieve, constitues a counter-example.
 pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool<'_> {
     let balancer_condition = equality(p.ctx, &p.output_bounds);
     // Correct model and NOT output equality
-    let model_condition = Bool::and(p.ctx, &[&balancer_condition.not(), &p.model_constraint]);
-
-    // Model edge throughput as existentially quantified variables
-    let cast_edge_bounds = p
-        .edge_bounds
-        .iter()
-        .map(|r| r as &dyn Ast)
-        .collect::<Vec<_>>();
-    let ex = exists_const(p.ctx, &cast_edge_bounds, &[], &model_condition);
-
-    // add (0 <= input) and (0 <= output) to global context
-    let zero = Int::from_i64(p.ctx, 0);
-    let trivial = p
-        .input_bounds
-        .iter()
-        .map(|i| i.ge(&zero))
-        .chain(p.output_bounds.iter().map(|o| o.ge(&zero.to_real())))
-        .collect::<Vec<_>>();
-    let trivial = vec_and(p.ctx, &trivial);
-
-    Bool::and(p.ctx, &[&trivial, &ex])
+    Bool::and(p.ctx, &[&balancer_condition.not(), &p.model_constraint])
 }
 
 /// Function to prove if a given z3 model is an equal drain belt balancer
@@ -185,35 +163,39 @@ pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 ///
 /// The `model_condition` states that the z3 model is modelled correctly and that equality of inputs does NOT imply equality of outputs.
 /// This is used to find a counter-example.
-/// Additionally the `trivial` constraint is added that constraints all inputs and outputs to be positive.
 pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
     let input_eq = equality(p.ctx, &p.input_bounds);
     let output_eq = equality(p.ctx, &p.output_bounds);
     // Correct model and equality of inputs does NOT imply equality of outputs
-    let model_condition = Bool::and(
+    Bool::and(
         p.ctx,
         &[&p.model_constraint, &input_eq.implies(&output_eq).not()],
-    );
+    )
+}
 
-    // Model edge throughput as existentially quantified variables
-    let cast_edge_bounds = p
-        .edge_bounds
-        .iter()
-        .map(|r| r as &dyn Ast)
+fn capacity_bound<'a, 'b>(
+    p: &'a ProofPrimitives<'a>,
+    entities: &[FBEntity<i32>],
+    iter: impl Iterator<Item = (&'b NodeIndex, &'a Real<'a>)>,
+) -> Bool<'a> {
+    let zero = Real::from_real(p.ctx, 0, 1);
+    let conditions = iter
+        .map(|(idx, v)| {
+            let lower = v.ge(&zero);
+
+            let entity_id = p.graph[*idx].get_id();
+            let capacity = entities
+                .iter()
+                .find(|e| e.get_base().id == entity_id)
+                .unwrap()
+                .get_base()
+                .throughput as i64;
+            let upper_const = Real::from_int(&Int::from_i64(p.ctx, capacity));
+            let upper = v.le(&upper_const);
+            Bool::and(p.ctx, &[&lower, &upper])
+        })
         .collect::<Vec<_>>();
-    let ex = exists_const(p.ctx, &cast_edge_bounds, &[], &model_condition);
-
-    // add (0 <= input) and (0 <= output) to global context
-    let zero = Int::from_i64(p.ctx, 0);
-    let trivial = p
-        .input_bounds
-        .iter()
-        .map(|i| i.ge(&zero))
-        .chain(p.output_bounds.iter().map(|o| o.ge(&zero.to_real())))
-        .collect::<Vec<_>>();
-    let trivial = vec_and(p.ctx, &trivial);
-
-    Bool::and(p.ctx, &[&trivial, &ex])
+    vec_and(p.ctx, &conditions)
 }
 
 /// Function that generates a function to prove if a given z3 model is a throughput unlimited belt balancer
@@ -225,8 +207,6 @@ pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 /// # Precondition
 ///
 /// Assumes that the model is a valid belt balancer.
-///
-/// TODO: fill
 ///
 /// To prove:
 /// ```text
