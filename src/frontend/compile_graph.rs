@@ -443,6 +443,5 @@ mod tests {
         graph.simplify(&[], crate::ir::CoalesceStrength::Aggressive);
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
-        graph.to_svg("tests/belt_weave.svg").unwrap();
     }
 }

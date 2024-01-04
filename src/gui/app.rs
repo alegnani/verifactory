@@ -147,7 +147,6 @@ impl MyApp {
         } else {
             graph
         };
-        graph.to_svg("debug.svg").unwrap();
         graph
     }
 

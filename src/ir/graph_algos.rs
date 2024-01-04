@@ -340,7 +340,6 @@ mod test {
         let mut graph = Compiler::new(entities).create_graph();
         graph.remove_false_io(&[]);
         graph.simplify(&[4, 5, 6], Aggressive);
-        graph.to_svg("tests/3-2-broken.svg").unwrap();
         assert_eq!(graph.node_count(), 10);
         assert_eq!(graph.edge_count(), 9);
     }
@@ -353,7 +352,6 @@ mod test {
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
         assert_eq!(graph.edge_weights().next().unwrap().capacity, 15.into());
-        graph.to_svg("tests/belt_reduction.svg").unwrap();
     }
 
     #[test]
@@ -361,7 +359,6 @@ mod test {
         let entities = file_to_entities("tests/splitter_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4], Aggressive);
-        graph.to_svg("tests/splitter_reduction.svg").unwrap();
         assert_eq!(graph.node_count(), 4);
         assert_eq!(graph.edge_count(), 3);
     }
@@ -371,7 +368,6 @@ mod test {
         let entities = file_to_entities("tests/splitter_merger_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4, 5], Aggressive);
-        graph.to_svg("tests/splitter_merger_reduction.svg").unwrap();
         assert_eq!(graph.node_count(), 16);
         assert_eq!(graph.edge_count(), 16);
     }
@@ -380,7 +376,6 @@ mod test {
     fn prio_splitter() {
         let entities = file_to_entities("tests/prio_splitter").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
-        graph.to_svg("tests/prio_splitter.svg").unwrap();
         graph.simplify(&[], Aggressive);
     }
 }
