@@ -12,6 +12,7 @@ use crate::ir::{Connector, Edge, FlowGraph, GraphHelper, Input, Merger, Node, Ou
 
 use super::model_graph::{ModelFlags, Z3QuantHelper};
 
+// TODO: document whole file
 trait Z3Fraction {
     fn to_z3<'a>(&self, ctx: &'a Context) -> Real<'a>;
 }

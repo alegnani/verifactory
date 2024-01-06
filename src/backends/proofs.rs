@@ -1,5 +1,6 @@
 use z3::SatResult;
 
+// TODO: decide structure of proofs
 pub trait Z3Proofs {
     fn is_balancer(&self) -> SatResult;
     fn is_equal_drain_balancer(&self) -> SatResult;
@@ -34,6 +35,7 @@ impl Negatable for SatResult {
     }
 }
 
+// TODO: decide what to do with these tests
 // #[cfg(test)]
 // mod test {
 //     use crate::{

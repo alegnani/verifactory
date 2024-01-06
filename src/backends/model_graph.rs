@@ -25,6 +25,7 @@ pub struct Z3QuantHelper<'a> {
     pub blocking: Vec<Bool<'a>>,
 }
 
+#[derive(Debug, Clone)]
 pub struct ProofPrimitives<'a> {
     /// Z3 context
     pub ctx: &'a Context,
@@ -107,11 +108,17 @@ where
         blocking_constraint,
     };
 
-    solver.assert(&f(primitives));
+    solver.assert(&f(primitives.clone()));
     let res = solver.check().not();
     // TODO: move to tracing
     // println!("Solver:\n{:?}", solver);
-    println!("Model:\n{:?}", solver.get_model());
+    // println!("Model:\n{:?}", solver.get_model());
+    if let Some(model) = solver.get_model() {
+        for input in primitives.input_bounds {
+            let a = model.eval(&input, true);
+            println!("{:?}: {:?}", &input, a);
+        }
+    }
     res
 }
 
@@ -173,6 +180,7 @@ pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
     )
 }
 
+// TODO: figure out lifetimes and fix code duplication
 fn capacity_bound<'a, 'b>(
     p: &'a ProofPrimitives<'a>,
     entities: &[FBEntity<i32>],
@@ -321,6 +329,7 @@ mod tests {
     use crate::ir::CoalesceStrength;
     use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
+    // TODO: figure out lifetimes and fix code duplication
     #[test]
     fn is_balancer_3_2_broken() {
         let entities = file_to_entities("tests/3-2-broken").unwrap();

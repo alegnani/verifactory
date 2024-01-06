@@ -264,6 +264,7 @@ impl eframe::App for MyApp {
             ui.heading("Proofs");
             ui.separator();
 
+            // TODO: figure out lifetimes and fix code duplication
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
