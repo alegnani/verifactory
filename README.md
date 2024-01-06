@@ -19,12 +19,13 @@ Although no optimizations have been made the verifier is extremely performant. T
 Take for example the following [64x64 belt balancer](https://fbe.teoxoy.com/?source=https://www.factorio.school/api/blueprintData/322abb92820177a1d15d3d7dea13353bae52a723/position/14). To load and verify both belt-balancing and equal-drain properties it takes less then 1 second! With any other tool this would take considerably longer.
 
 
-## Features
+## Features and Todos
 
  - Standard properties:
    - [x] Belt balancing
    - [x] Equal input drain
-   - [ ] Throughput unlimited
+   - [x] Throughput unlimited
+   - [x] Universal balancer
  - [x] Counter example generation 
  - [ ] Correct colors for the different belts
  - [ ] Find a nice way to visualize or export a counter example
@@ -33,6 +34,7 @@ Take for example the following [64x64 belt balancer](https://fbe.teoxoy.com/?sou
  - [ ] Resizable and movable canvas
  - [ ] Support for inserters and assemblers
  - [ ] Custom language to express arbitrary properties
+ - [ ] DOCS!
 
 ## Installation
 
@@ -41,9 +43,16 @@ This option ships factorio_verify bundled with z3.
 
 ### Building from source
 
-The program requires the z3 solver to be installed on the system.
-Clone the project and build it using `cargo build --release`. This will take a while!
-Then run with `cargo run --release`.
+`factorio_verify` can be compiled either with `z3` bundled with it or needing a valid installation of it on the system. For Windows it is recommended to go for the bundled version.
+
+#### Building the standalone version
+
+To build: `cargo build --release`. To run: `cargo run --release`.
+Executable can be found in `target/release`.
+
+#### Building the bundled version
+To build: `cargo build --release --features build_z3`. To run: `cargo run --release --features --build_z3`.
+Executable can be found in `target/release`.
 
 ## Contributing
 
@@ -55,5 +64,5 @@ Bug reports are greatly appreciated. :)
 
 ## Design Document
 
-More information about how the project is structured can be found under this [link](design_doc/design_doc.html).
+More information about how the project is structured can be found under this [link](design_doc/design_doc.md).
 This includes the design document specifying how the underlying conversion from Factorio blueprints to the z3 model works.
