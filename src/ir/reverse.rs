@@ -75,8 +75,6 @@ mod test {
         let entities = file_to_entities("tests/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3], Aggressive);
-        graph.to_svg("tests/3-2-normal.svg").unwrap();
         let rev = graph.reverse();
-        rev.to_svg("tests/3-2-rev.svg").unwrap();
     }
 }
