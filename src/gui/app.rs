@@ -355,10 +355,9 @@ impl eframe::App for MyApp {
             ui.label("- Big blueprints won't fit on the screen.\n  \
             Use *View > Decrease blueprint size* to zoom out. \
             A better, zoomable and movable, canvas is WIP.");
-            ui.label("- Factorio Verify can prove much more than the automatic proofs above.\n  \
+            ui.label("- VeriFactory can prove much more than the automatic proofs above.\n  \
             A custom language to specify own properties is WIP.");
-            ui.label("\n  Thank you for testing Factorio Verify and have fun.\n  The factory must grow!");
-
+            ui.label("\n  Thank you for testing VeriFactory and have fun.\n  The factory must grow!");
         });
     }
 }

@@ -1,4 +1,4 @@
-//! Implementation of the GUI of Factorio Verify
+//! Implementation of the GUI of VeriFactory
 
 mod app;
 mod grid;

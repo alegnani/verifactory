@@ -1,11 +1,11 @@
-# Factorio Verify
+# VeriFactory
 ![](teaser.png)
 
-Factorio Verify is a verifier for Factorio blueprints, enabling you to automatically check logical properties on a blueprint.
+VeriFactory is a verifier for Factorio blueprints, enabling you to automatically check logical properties on a blueprint.
 Currently this is limited to checking whether or not a belt-balancer works and if the inputs get all drained the same, leading to no imbalances.
 
 ## How it works
- - A blueprint is loaded with **File > Open blueprint** or **File > Open blueprint file**.
+ - A blueprint is loaded via **File > Open blueprint**, **File > Open blueprint file** or by pasting with the `Ctrl+V` shortcut.
  - Automatically added inputs/outputs should be removed accordingly (Every belt or splitter ending or starting from nothing gets flagged as input/output).
  - Every entity of the blueprint is then transformed into one or more nodes in a graph (using an intermediate representation).
  - The graph is simplified and the throughputs of the different edges are minimized as much as possible.
@@ -38,12 +38,12 @@ Take for example the following [64x64 belt balancer](https://fbe.teoxoy.com/?sou
 
 ## Installation
 
-The latest version of the program can be found [here](https://github.com/alegnani/factorio_verify/releases) for both Windows and Linux. 
-This option ships factorio_verify bundled with z3.
+The latest version of the program can be found [here](https://github.com/alegnani/verifactory/releases) for both Windows and Linux. 
+This option ships VeriFactory bundled with z3.
 
 ### Building from source
 
-`factorio_verify` can be compiled either with `z3` bundled with it or needing a valid installation of it on the system. For Windows it is recommended to go for the bundled version.
+`VeriFactory` can be compiled either with `z3` bundled with it or needing a valid installation of it on the system. For Windows it is recommended to go for the bundled version.
 
 #### Building the standalone version
 

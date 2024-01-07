@@ -25,7 +25,7 @@ where
     }
 }
 
-/// Enum of possible entities that are supported by Factorio Verify
+/// Enum of possible entities that are supported by VeriFactory
 ///
 /// The phantoms are used to populate the grid of entities with entities that are bigger than 1x1.
 /// These include the splitter (2x1) and the assembler (3x3).

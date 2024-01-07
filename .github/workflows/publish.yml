@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: factorio_verify
-            asset_name: factorio_verify-linux
+            artifact_name: verifactory
+            asset_name: VeriFactory-linux
           - os: windows-latest
-            artifact_name: factorio_verify.exe
-            asset_name: factorio_verify-win
+            artifact_name: verifactory.exe
+            asset_name: VeriFactory-win.exe
 
     steps:
     - uses: actions/checkout@v3
