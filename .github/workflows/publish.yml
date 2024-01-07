@@ -5,6 +5,9 @@ on:
     tags:
       - '*'
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   publish:
     name: Publish for ${{ matrix.os }}
@@ -21,8 +24,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Set up cargo cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
-      run: cargo build --release --features build_z3
+      run: cargo build --release --features build_z3 --verbose
     - name: Upload binaries to release
       uses: svenstaro/upload-release-action@v2
       with:
@@ -30,3 +43,4 @@ jobs:
         file: target/release/${{ matrix.artifact_name }}
         asset_name: ${{ matrix.asset_name }}
         tag: ${{ github.ref }}
+        prerelease: true
