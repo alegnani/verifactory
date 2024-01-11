@@ -276,10 +276,18 @@ pub fn throughput_unlimited<'a>(
         let output_condition = vec_and(p.ctx, &output_constraints);
 
         let outputs = p.output_map.values().collect::<Vec<_>>();
-        let output_sum = Real::add(p.ctx, &outputs);
+        let output_sum = if !outputs.is_empty() {
+            Real::add(p.ctx, &outputs)
+        } else {
+            zero.clone()
+        };
 
         let inputs = p.input_map.values().collect::<Vec<_>>();
-        let input_sum = Real::from_int(&Int::add(p.ctx, &inputs));
+        let input_sum = if !inputs.is_empty() {
+            Real::from_int(&Int::add(p.ctx, &inputs))
+        } else {
+            zero
+        };
 
         let in_out_eq = input_sum._eq(&output_sum);
 
@@ -447,5 +455,54 @@ mod tests {
         let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
         println!("Result: {}", res.to_str());
         assert!(matches!(res, SatResult::Unsat));
+    }
+
+    #[test]
+    fn empty_belt_balancer() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn empty_equal_drain() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn empty_throughput_unlimited() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelFlags::Relaxed,
+        );
+        assert!(matches!(res, SatResult::Sat));
+    }
+
+    #[test]
+    fn empty_universal_balancer() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::Blocked);
+        assert!(matches!(res, SatResult::Sat));
     }
 }
