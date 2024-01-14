@@ -31,3 +31,7 @@ pest_derive = "2.7.6"
 
 [features]
 build_z3 = ["z3/static-link-z3"]
+
+[profile.release]
+lto = true
+strip = true
