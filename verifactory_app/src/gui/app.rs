@@ -8,7 +8,7 @@ use egui_file::FileDialog;
 use egui_toast::{Toast, ToastOptions, Toasts};
 use z3::{Config, Context, SatResult};
 
-use crate::{
+use verifactory_lib::{
     backends::{
         belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, universal_balancer,
         ModelFlags, Printable,
@@ -144,12 +144,11 @@ impl MyApp {
         println!("Remove list: {:?}", removed);
 
         graph.simplify(&removed, CoalesceStrength::Aggressive);
-        let graph = if reversed {
+        if reversed {
             Reversable::reverse(&graph)
         } else {
             graph
-        };
-        graph
+        }
     }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
