@@ -3,12 +3,12 @@ use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::{collections::HashMap, mem};
 use z3::{
     ast::{exists_const, forall_const, Ast, Bool, Int, Real},
-    Context, SatResult, Solver,
+    Context, Solver,
 };
 
 use crate::{entities::FBEntity, ir::FlowGraph};
 
-use super::proofs::Negatable;
+use super::proofs::ProofResult;
 
 use super::model_entities::{Z3Edge, Z3Node};
 
@@ -59,7 +59,12 @@ bitflags! {
     }
 }
 
-pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F, flags: ModelFlags) -> SatResult
+pub fn model_f<'a, F>(
+    graph: &'a FlowGraph,
+    ctx: &'a Context,
+    f: F,
+    flags: ModelFlags,
+) -> ProofResult
 where
     F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
 {
@@ -109,7 +114,7 @@ where
     };
 
     solver.assert(&f(primitives.clone()));
-    let res = solver.check().not();
+    let res: ProofResult = solver.check().into();
     // TODO: move to tracing
     // println!("Solver:\n{:?}", solver);
     // println!("Model:\n{:?}", solver.get_model());
@@ -119,7 +124,7 @@ where
             println!("{:?}: {:?}", &input, a);
         }
     }
-    res
+    res.not()
 }
 
 /// Conjunction of a slice of `Bool`s.
@@ -333,7 +338,6 @@ mod tests {
     use z3::Config;
 
     use super::*;
-    use crate::backends::Printable;
     use crate::ir::CoalesceStrength;
     use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
@@ -346,8 +350,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -358,8 +362,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -375,8 +379,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -392,8 +396,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -409,8 +413,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -426,8 +430,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -441,8 +445,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -453,8 +457,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -465,7 +469,7 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
-        assert!(matches!(res, SatResult::Sat));
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -476,7 +480,7 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
-        assert!(matches!(res, SatResult::Sat));
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -492,7 +496,7 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        assert!(matches!(res, SatResult::Sat));
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -503,6 +507,6 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::Blocked);
-        assert!(matches!(res, SatResult::Sat));
+        assert!(matches!(res, ProofResult::Sat));
     }
 }

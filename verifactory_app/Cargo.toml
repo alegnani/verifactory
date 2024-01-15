@@ -14,7 +14,6 @@ egui_extras = { version = "0.25.0", features = ["all_loaders"]}
 egui_file = "0.14.0"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-z3 = "0.12.1"
 verifactory_lib = { path = "../verifactory_lib" }
 
 [features]
