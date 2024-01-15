@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
 members = [ "verifactory_app","verifactory_lib"]
+
+[profile.release]
+lto = true
+strip = true
