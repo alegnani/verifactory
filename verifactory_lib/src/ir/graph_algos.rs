@@ -90,7 +90,7 @@ impl FlowGraphFun for FlowGraph {
             format!("{:?}", Dot::with_config(self, &[])),
             vec![Format::Svg.into()],
         )?;
-        File::create(path)?.write_all(svg.as_bytes())?;
+        File::create(path)?.write_all(&svg)?;
         Ok(())
     }
 }

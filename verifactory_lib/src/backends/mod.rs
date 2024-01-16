@@ -3,7 +3,7 @@ mod model_entities;
 mod model_graph;
 mod proofs;
 
-pub use self::proofs::{Printable, Z3Proofs};
+pub use self::proofs::{BlueprintProofEntity, ProofResult};
 
 pub use model_graph::{
     belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, universal_balancer, ModelFlags,

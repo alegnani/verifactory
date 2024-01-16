@@ -3,15 +3,14 @@ use std::{
     path::PathBuf,
 };
 
-use egui::{Align2, Direction, Event, Key};
+use egui::{Align2, Direction, Event};
 use egui_file::FileDialog;
 use egui_toast::{Toast, ToastOptions, Toasts};
-use z3::{Config, Context, SatResult};
 
-use crate::{
+use verifactory_lib::{
     backends::{
-        belt_balancer_f, equal_drain_f, model_f, throughput_unlimited, universal_balancer,
-        ModelFlags, Printable,
+        belt_balancer_f, equal_drain_f, throughput_unlimited, universal_balancer,
+        BlueprintProofEntity, ModelFlags, ProofResult,
     },
     entities::{EntityId, FBEntity},
     frontend::{Compiler, RelMap},
@@ -78,10 +77,10 @@ impl IOState {
 
 #[derive(Default)]
 pub struct ProofState {
-    balancer: Option<SatResult>,
-    equal_drain: Option<SatResult>,
-    throughput_unlimited: Option<SatResult>,
-    universal: Option<SatResult>,
+    balancer: Option<ProofResult>,
+    equal_drain: Option<ProofResult>,
+    throughput_unlimited: Option<ProofResult>,
+    universal: Option<ProofResult>,
 }
 
 pub type EntityGrid = Vec<Vec<Option<FBEntity<i32>>>>;
@@ -144,12 +143,11 @@ impl MyApp {
         println!("Remove list: {:?}", removed);
 
         graph.simplify(&removed, CoalesceStrength::Aggressive);
-        let graph = if reversed {
+        if reversed {
             Reversable::reverse(&graph)
         } else {
             graph
-        };
-        graph
+        }
     }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
@@ -268,13 +266,12 @@ impl eframe::App for MyApp {
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
                     let graph = self.generate_graph(false);
-                    let cfg = Config::new();
-                    let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+                    let mut proof = BlueprintProofEntity::new(graph);
+                    let res = proof.model(belt_balancer_f, ModelFlags::empty());
                     self.proof_state.balancer = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.balancer {
-                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                    ui.label(format!("Proof result: {}", proof_res));
                 }
             });
 
@@ -284,13 +281,12 @@ impl eframe::App for MyApp {
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
                     let graph = self.generate_graph(true);
-                    let cfg = Config::new();
-                    let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
+                    let mut proof = BlueprintProofEntity::new(graph);
+                    let res = proof.model(equal_drain_f, ModelFlags::empty());
                     self.proof_state.equal_drain = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.equal_drain {
-                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                    ui.label(format!("Proof result: {}", proof_res));
                 }
             });
 
@@ -302,19 +298,13 @@ impl eframe::App for MyApp {
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
                     let graph = self.generate_graph(false);
-                    let cfg = Config::new();
-                    let ctx = Context::new(&cfg);
+                    let mut proof = BlueprintProofEntity::new(graph);
                     let entities = self.grid.iter().flatten().flatten().cloned().collect();
-                    let res = model_f(
-                        &graph,
-                        &ctx,
-                        throughput_unlimited(entities),
-                        ModelFlags::Relaxed,
-                    );
+                    let res = proof.model(throughput_unlimited(entities), ModelFlags::Relaxed);
                     self.proof_state.throughput_unlimited = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.throughput_unlimited {
-                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                    ui.label(format!("Proof result: {}", proof_res));
                 }
             });
             ui.label("\n");
@@ -323,13 +313,12 @@ impl eframe::App for MyApp {
             ui.horizontal(|ui| {
                 if ui.button("Prove").clicked() {
                     let graph = self.generate_graph(false);
-                    let cfg = Config::new();
-                    let ctx = Context::new(&cfg);
-                    let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
+                    let mut proof = BlueprintProofEntity::new(graph);
+                    let res = proof.model(universal_balancer, ModelFlags::Blocked);
                     self.proof_state.universal = Some(res);
                 }
                 if let Some(proof_res) = self.proof_state.universal {
-                    ui.label(format!("Proof result: {}", proof_res.to_str()));
+                    ui.label(format!("Proof result: {}", proof_res));
                 }
             });
 

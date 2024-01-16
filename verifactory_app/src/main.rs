@@ -1,13 +1,4 @@
-#![doc = include_str!("../README.md")]
-
-mod backends;
-mod entities;
-mod frontend;
 mod gui;
-mod import;
-mod ir;
-mod utils;
-
 use std::{fs::File, sync::Arc};
 
 use eframe::NativeOptions;

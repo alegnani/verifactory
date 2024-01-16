@@ -16,10 +16,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: verifactory
+            artifact_name: verifactory_app
             asset_name: VeriFactory-linux
           - os: windows-latest
-            artifact_name: verifactory.exe
+            artifact_name: verifactory_app.exe
             asset_name: VeriFactory-win.exe
 
     steps:
@@ -35,7 +35,7 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
-      run: cargo build --release --features build_z3 --verbose
+      run: cargo build -p verifactory_app --release --features build_z3 --verbose
     - name: Upload binaries to release
       uses: svenstaro/upload-release-action@v2
       with:

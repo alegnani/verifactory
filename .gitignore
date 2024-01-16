@@ -13,12 +13,6 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-# Remove generated graph svgs
-*.svg
-!img/*.svg
-
-imgs/rotate.sh
-
 *.log
 
 # Ignore direnv files

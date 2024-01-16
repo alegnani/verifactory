@@ -1,0 +1,20 @@
+[package]
+name = "verifactory_app"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.79"
+eframe = "0.25.0"
+egui = "0.25.0"
+egui-toast = "0.10.2"
+egui_extras = { version = "0.25.0", features = ["all_loaders"]}
+egui_file = "0.14.0"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+verifactory_lib = { path = "../verifactory_lib" }
+
+[features]
+build_z3 = ["verifactory_lib/build_z3"]

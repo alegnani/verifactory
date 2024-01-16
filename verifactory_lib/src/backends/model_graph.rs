@@ -3,12 +3,12 @@ use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::{collections::HashMap, mem};
 use z3::{
     ast::{exists_const, forall_const, Ast, Bool, Int, Real},
-    Context, SatResult, Solver,
+    Context, Solver,
 };
 
 use crate::{entities::FBEntity, ir::FlowGraph};
 
-use super::proofs::Negatable;
+use super::proofs::ProofResult;
 
 use super::model_entities::{Z3Edge, Z3Node};
 
@@ -59,7 +59,12 @@ bitflags! {
     }
 }
 
-pub fn model_f<'a, F>(graph: &'a FlowGraph, ctx: &'a Context, f: F, flags: ModelFlags) -> SatResult
+pub fn model_f<'a, F>(
+    graph: &'a FlowGraph,
+    ctx: &'a Context,
+    f: F,
+    flags: ModelFlags,
+) -> ProofResult
 where
     F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
 {
@@ -109,7 +114,7 @@ where
     };
 
     solver.assert(&f(primitives.clone()));
-    let res = solver.check().not();
+    let res: ProofResult = solver.check().into();
     // TODO: move to tracing
     // println!("Solver:\n{:?}", solver);
     // println!("Model:\n{:?}", solver.get_model());
@@ -119,7 +124,7 @@ where
             println!("{:?}: {:?}", &input, a);
         }
     }
-    res
+    res.not()
 }
 
 /// Conjunction of a slice of `Bool`s.
@@ -276,10 +281,18 @@ pub fn throughput_unlimited<'a>(
         let output_condition = vec_and(p.ctx, &output_constraints);
 
         let outputs = p.output_map.values().collect::<Vec<_>>();
-        let output_sum = Real::add(p.ctx, &outputs);
+        let output_sum = if !outputs.is_empty() {
+            Real::add(p.ctx, &outputs)
+        } else {
+            zero.clone()
+        };
 
         let inputs = p.input_map.values().collect::<Vec<_>>();
-        let input_sum = Real::from_int(&Int::add(p.ctx, &inputs));
+        let input_sum = if !inputs.is_empty() {
+            Real::from_int(&Int::add(p.ctx, &inputs))
+        } else {
+            zero
+        };
 
         let in_out_eq = input_sum._eq(&output_sum);
 
@@ -325,7 +338,6 @@ mod tests {
     use z3::Config;
 
     use super::*;
-    use crate::backends::Printable;
     use crate::ir::CoalesceStrength;
     use crate::{frontend::Compiler, import::file_to_entities, ir::FlowGraphFun};
 
@@ -338,8 +350,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -350,8 +362,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -367,8 +379,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -384,8 +396,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -401,8 +413,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -418,8 +430,8 @@ mod tests {
             throughput_unlimited(entities),
             ModelFlags::Relaxed,
         );
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
     }
 
     #[test]
@@ -433,8 +445,8 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Sat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Sat));
     }
 
     #[test]
@@ -445,7 +457,56 @@ mod tests {
         let cfg = Config::new();
         let ctx = Context::new(&cfg);
         let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
-        println!("Result: {}", res.to_str());
-        assert!(matches!(res, SatResult::Unsat));
+        println!("Result: {}", res);
+        assert!(matches!(res, ProofResult::Unsat));
+    }
+
+    #[test]
+    fn empty_belt_balancer() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+        assert!(matches!(res, ProofResult::Sat));
+    }
+
+    #[test]
+    fn empty_equal_drain() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
+        assert!(matches!(res, ProofResult::Sat));
+    }
+
+    #[test]
+    fn empty_throughput_unlimited() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities.clone()).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(
+            &graph,
+            &ctx,
+            throughput_unlimited(entities),
+            ModelFlags::Relaxed,
+        );
+        assert!(matches!(res, ProofResult::Sat));
+    }
+
+    #[test]
+    fn empty_universal_balancer() {
+        let entities = vec![];
+        let mut graph = Compiler::new(entities).create_graph();
+        graph.simplify(&[], CoalesceStrength::Aggressive);
+        let cfg = Config::new();
+        let ctx = Context::new(&cfg);
+        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::Blocked);
+        assert!(matches!(res, ProofResult::Sat));
     }
 }

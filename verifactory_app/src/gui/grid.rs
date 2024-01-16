@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
-use crate::{
+use verifactory_lib::{
     entities::{BeltType, FBBelt, FBEntity, FBSplitter, Priority},
     frontend::RelMap,
     utils::{Direction, Position, Rotation},
@@ -151,10 +151,7 @@ impl MyApp {
         /* if the entity is a splitter force the arrow to be drawn in the middle */
         if let FBEntity::Splitter(s) = entity {
             let size = self.grid_settings.size as f32;
-            let rot = s
-                .base
-                .direction
-                .rotate(crate::utils::Rotation::Clockwise, 1);
+            let rot = s.base.direction.rotate(Rotation::Clockwise, 1);
             rect = rect
                 .shrink_dir(rot, size / 2.)
                 .shrink_dir(rot.flip(), size / 2.);

@@ -1,37 +1,79 @@
-use z3::SatResult;
+use std::fmt::Display;
 
-// TODO: decide structure of proofs
-pub trait Z3Proofs {
-    fn is_balancer(&self) -> SatResult;
-    fn is_equal_drain_balancer(&self) -> SatResult;
-    fn get_counter_example(&self);
+use z3::{ast::Bool, Config, Context, SatResult};
+
+use crate::ir::FlowGraph;
+
+use super::{model_f, ModelFlags, ProofPrimitives};
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProofResult {
+    Unknown,
+    Sat,
+    Unsat,
 }
 
-pub trait Negatable {
-    fn not(self) -> Self;
-}
-
-pub trait Printable {
-    fn to_str(&self) -> &'static str;
-}
-
-impl Printable for SatResult {
-    fn to_str(&self) -> &'static str {
+impl ProofResult {
+    pub fn not(&self) -> Self {
         match self {
-            Self::Sat => "Yes",
-            Self::Unsat => "No",
-            Self::Unknown => "Unknown",
+            ProofResult::Sat => ProofResult::Unsat,
+            ProofResult::Unsat => ProofResult::Sat,
+            ProofResult::Unknown => ProofResult::Unknown,
         }
     }
 }
 
-impl Negatable for SatResult {
-    fn not(self) -> Self {
-        match self {
-            SatResult::Sat => SatResult::Unsat,
-            SatResult::Unsat => SatResult::Sat,
-            SatResult::Unknown => SatResult::Unknown,
+impl From<SatResult> for ProofResult {
+    fn from(value: SatResult) -> Self {
+        match value {
+            SatResult::Unknown => ProofResult::Unknown,
+            SatResult::Unsat => ProofResult::Unsat,
+            SatResult::Sat => ProofResult::Sat,
         }
+    }
+}
+
+impl Display for ProofResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Sat => "Yes",
+            Self::Unsat => "No",
+            Self::Unknown => "Unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+pub struct BlueprintProofEntity {
+    _cfg: Config,
+    ctx: Context,
+    graph: FlowGraph,
+    result: Option<ProofResult>,
+}
+
+impl BlueprintProofEntity {
+    pub fn new(graph: FlowGraph) -> Self {
+        let _cfg = Config::new();
+        let ctx = Context::new(&_cfg);
+        Self {
+            _cfg,
+            ctx,
+            graph,
+            result: None,
+        }
+    }
+
+    pub fn model<'a, F>(&'a mut self, f: F, flags: ModelFlags) -> ProofResult
+    where
+        F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
+    {
+        let res = model_f(&self.graph, &self.ctx, f, flags).into();
+        self.result = Some(res);
+        res
+    }
+
+    pub fn result(&self) -> Option<ProofResult> {
+        self.result
     }
 }
 
