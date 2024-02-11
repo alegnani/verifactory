@@ -223,13 +223,13 @@ impl eframe::App for MyApp {
                     if io_state.input_entities.contains(&id) {
                         ui.horizontal(|ui| {
                             ui.label("Selected as blueprint input");
-                            if ui.button("Remove from input").clicked() || i_pressed {
+                            if ui.button("Remove from input (i)").clicked() || i_pressed {
                                 io_state.input_entities.remove(&id);
                             }
                         });
                     } else if io_state.input_candidates.contains(&id) {
                         ui.label("Can be selected as blueprint input");
-                        if ui.button("Select as input").clicked() || i_pressed {
+                        if ui.button("Select as input (i)").clicked() || i_pressed {
                             io_state.input_entities.insert(id);
                         }
                     }
@@ -237,12 +237,12 @@ impl eframe::App for MyApp {
                 ui.horizontal(|ui| {
                     if io_state.output_entities.contains(&id) {
                         ui.label("Selected as blueprint output");
-                        if ui.button("Remove from output").clicked() || o_pressed {
+                        if ui.button("Remove from output (o)").clicked() || o_pressed {
                             io_state.output_entities.remove(&id);
                         }
                     } else if io_state.output_candidates.contains(&id) {
                         ui.label("Can be selected as blueprint output");
-                        if ui.button("Select as output").clicked() || o_pressed {
+                        if ui.button("Select as output (o)").clicked() || o_pressed {
                             io_state.output_entities.insert(id);
                         }
                     }
