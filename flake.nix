@@ -14,12 +14,15 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+        rust = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-src" "cargo" "rustc"];
+        }; 
       in
       with pkgs;
       {
         devShells.default = mkShell rec {
           buildInputs = [
-            rust-bin.stable.latest.default
+            rust   
             z3
             wayland
             libGL
@@ -29,6 +32,8 @@
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
           # LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
           nativeBuildInputs = [ rustPlatform.bindgenHook ];
+
+          RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
         };
       }
     );
