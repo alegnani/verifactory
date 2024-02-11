@@ -91,6 +91,30 @@ impl MyApp {
                         }
                     }
                 });
+
+                ui.menu_button("I/O", |ui| {
+                    ui.heading("Inputs");
+                    if ui.button("Select all").clicked() {
+                        self.io_state
+                            .input_entities
+                            .extend(self.io_state.input_candidates.iter());
+                    }
+                    if ui.button("Deselect all").clicked() {
+                        self.io_state.input_entities.clear();
+                    }
+
+                    ui.separator();
+
+                    ui.heading("Outputs");
+                    if ui.button("Select all").clicked() {
+                        self.io_state
+                            .output_entities
+                            .extend(self.io_state.output_candidates.iter());
+                    }
+                    if ui.button("Deselect all").clicked() {
+                        self.io_state.output_entities.clear();
+                    }
+                });
             })
         });
     }

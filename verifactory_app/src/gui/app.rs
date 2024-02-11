@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use egui::{Align2, Direction, Event};
+use egui::{Align2, Direction, Event, InputState, Key};
 use egui_file::FileDialog;
 use egui_toast::{Toast, ToastOptions, Toasts};
 
@@ -209,6 +209,8 @@ impl eframe::App for MyApp {
 
         let io_state = &mut self.io_state;
         if let Some(sel) = self.selection {
+            let (i_pressed, o_pressed) =
+                ctx.input(|i: &InputState| (i.key_pressed(Key::I), i.key_pressed(Key::O)));
             egui::SidePanel::right("right").show(ctx, |ui| {
                 let base = sel.get_base();
                 let id = base.id;
@@ -216,17 +218,18 @@ impl eframe::App for MyApp {
                 ui.separator();
                 ui.label(format!("Entity ID: {}", id));
                 ui.label(format!("Throughput: {}/s", base.throughput as i32));
+
                 ui.horizontal(|ui| {
                     if io_state.input_entities.contains(&id) {
                         ui.horizontal(|ui| {
                             ui.label("Selected as blueprint input");
-                            if ui.button("Remove from input").clicked() {
+                            if ui.button("Remove from input (i)").clicked() || i_pressed {
                                 io_state.input_entities.remove(&id);
                             }
                         });
                     } else if io_state.input_candidates.contains(&id) {
                         ui.label("Can be selected as blueprint input");
-                        if ui.button("Select as input").clicked() {
+                        if ui.button("Select as input (i)").clicked() || i_pressed {
                             io_state.input_entities.insert(id);
                         }
                     }
@@ -234,12 +237,12 @@ impl eframe::App for MyApp {
                 ui.horizontal(|ui| {
                     if io_state.output_entities.contains(&id) {
                         ui.label("Selected as blueprint output");
-                        if ui.button("Remove from output").clicked() {
+                        if ui.button("Remove from output (o)").clicked() || o_pressed {
                             io_state.output_entities.remove(&id);
                         }
                     } else if io_state.output_candidates.contains(&id) {
                         ui.label("Can be selected as blueprint output");
-                        if ui.button("Select as output").clicked() {
+                        if ui.button("Select as output (o)").clicked() || o_pressed {
                             io_state.output_entities.insert(id);
                         }
                     }
