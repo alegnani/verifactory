@@ -18,6 +18,7 @@ use verifactory_lib::{
     ir::{CoalesceStrength, FlowGraph, FlowGraphFun, Node, Reversable},
     utils::Position,
 };
+use crate::async_resource::AsyncResource;
 
 use super::menu::BlueprintString;
 
@@ -77,10 +78,30 @@ impl IOState {
 
 #[derive(Default)]
 pub struct ProofState {
-    balancer: Option<ProofResult>,
-    equal_drain: Option<ProofResult>,
-    throughput_unlimited: Option<ProofResult>,
-    universal: Option<ProofResult>,
+    balancer: Option<AsyncResource<ProofResult>>,
+    equal_drain: Option<AsyncResource<ProofResult>>,
+    throughput_unlimited: Option<AsyncResource<ProofResult>>,
+    universal: Option<AsyncResource<ProofResult>>,
+}
+
+impl ProofState {
+    pub fn poll_all(&mut self) {
+        if let Some(v) = &mut self.balancer {
+            v.poll();
+        }
+
+        if let Some(v) = &mut self.equal_drain {
+            v.poll();
+        }
+
+        if let Some(v) = &mut self.throughput_unlimited {
+            v.poll();
+        }
+
+        if let Some(v) = &mut self.universal {
+            v.poll();
+        }
+    }
 }
 
 pub type EntityGrid = Vec<Vec<Option<FBEntity<i32>>>>;
@@ -173,6 +194,8 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.proof_state = self.proof_state.poll_all();
+
         // Set up toast notifications in the top right
         let mut toasts = Toasts::new()
             .anchor(Align2::RIGHT_TOP, (-10.0, 10.0))
@@ -267,14 +290,21 @@ impl eframe::App for MyApp {
             // TODO: figure out lifetimes and fix code duplication
             ui.heading("Is it a belt-balancer?");
             ui.horizontal(|ui| {
-                if ui.button("Prove").clicked() {
-                    let graph = self.generate_graph(false);
-                    let mut proof = BlueprintProofEntity::new(graph);
-                    let res = proof.model(belt_balancer_f, ModelFlags::empty());
-                    self.proof_state.balancer = Some(res);
+                if self.proof_state.balancer.is_none() {
+                    if ui.button("Prove").clicked() {
+                        self.proof_state.balancer = Some(AsyncResource::new(|| {
+                            let graph = self.generate_graph(false);
+                            let mut proof = BlueprintProofEntity::new(graph);
+                            proof.model(belt_balancer_f, ModelFlags::empty())
+                        }));
+                    }
                 }
-                if let Some(proof_res) = self.proof_state.balancer {
-                    ui.label(format!("Proof result: {}", proof_res));
+                else if let Some(proof_res) = &self.proof_state.balancer {
+                    if let Some(r) = proof_res.get_result() {
+                        ui.label(format!("Proof result: {}", r));
+                    } else {
+                        ui.label("Pending...");
+                    }
                 }
             });
 
@@ -282,14 +312,21 @@ impl eframe::App for MyApp {
 
             ui.heading("Is it an equal drain belt-balancer (assumes it is a belt-balancer)?");
             ui.horizontal(|ui| {
-                if ui.button("Prove").clicked() {
-                    let graph = self.generate_graph(true);
-                    let mut proof = BlueprintProofEntity::new(graph);
-                    let res = proof.model(equal_drain_f, ModelFlags::empty());
-                    self.proof_state.equal_drain = Some(res);
+                if self.proof_state.equal_drain.is_none() {
+                    if ui.button("Prove").clicked() {
+                        self.proof_state.equal_drain = Some(AsyncResource::new(|| {
+                            let graph = self.generate_graph(true);
+                            let mut proof = BlueprintProofEntity::new(graph);
+                            proof.model(equal_drain_f, ModelFlags::empty())
+                        }));
+                    }
                 }
-                if let Some(proof_res) = self.proof_state.equal_drain {
-                    ui.label(format!("Proof result: {}", proof_res));
+                else if let Some(proof_res) = &self.proof_state.equal_drain {
+                    if let Some(r) = proof_res.get_result() {
+                        ui.label(format!("Proof result: {}", r));
+                    } else {
+                        ui.label("Pending...");
+                    }
                 }
             });
 
@@ -299,29 +336,43 @@ impl eframe::App for MyApp {
                 "Is it a throughput unlimited belt-balancer (assumes it is a belt-balancer)?",
             );
             ui.horizontal(|ui| {
-                if ui.button("Prove").clicked() {
-                    let graph = self.generate_graph(false);
-                    let mut proof = BlueprintProofEntity::new(graph);
-                    let entities = self.grid.iter().flatten().flatten().cloned().collect();
-                    let res = proof.model(throughput_unlimited(entities), ModelFlags::Relaxed);
-                    self.proof_state.throughput_unlimited = Some(res);
+                if self.proof_state.throughput_unlimited.is_none() {
+                    if ui.button("Prove").clicked() {
+                        self.proof_state.throughput_unlimited = Some(AsyncResource::new(|| {
+                            let graph = self.generate_graph(false);
+                            let mut proof = BlueprintProofEntity::new(graph);
+                            let entities = self.grid.iter().flatten().flatten().cloned().collect();
+                            proof.model(throughput_unlimited(entities), ModelFlags::Relaxed)
+                        }));
+                    }
                 }
-                if let Some(proof_res) = self.proof_state.throughput_unlimited {
-                    ui.label(format!("Proof result: {}", proof_res));
+                else if let Some(proof_res) = &self.proof_state.throughput_unlimited {
+                    if let Some(r) = proof_res.get_result() {
+                        ui.label(format!("Proof result: {}", r));
+                    } else {
+                        ui.label("Pending...");
+                    }
                 }
             });
             ui.label("\n");
 
             ui.heading("Is it a universal belt-balancer?");
             ui.horizontal(|ui| {
-                if ui.button("Prove").clicked() {
-                    let graph = self.generate_graph(false);
-                    let mut proof = BlueprintProofEntity::new(graph);
-                    let res = proof.model(universal_balancer, ModelFlags::Blocked);
-                    self.proof_state.universal = Some(res);
+                if self.proof_state.universal.is_none() {
+                    if ui.button("Prove").clicked() {
+                        self.proof_state.universal = Some(AsyncResource::new(|| {
+                            let graph = self.generate_graph(false);
+                            let mut proof = BlueprintProofEntity::new(graph);
+                            proof.model(universal_balancer, ModelFlags::Blocked)
+                        }));
+                    }
                 }
-                if let Some(proof_res) = self.proof_state.universal {
-                    ui.label(format!("Proof result: {}", proof_res));
+                else if let Some(proof_res) = &self.proof_state.universal {
+                    if let Some(r) = proof_res.get_result() {
+                        ui.label(format!("Proof result: {}", r));
+                    } else {
+                        ui.label("Pending...");
+                    }
                 }
             });
 

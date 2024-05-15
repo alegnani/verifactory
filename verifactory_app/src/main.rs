@@ -1,4 +1,6 @@
 mod gui;
+mod async_resource;
+
 use std::{fs::File, sync::Arc};
 
 use eframe::NativeOptions;
