@@ -27,6 +27,7 @@
             wayland
             libGL
             libxkbcommon
+            graphviz
           ];
 
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";

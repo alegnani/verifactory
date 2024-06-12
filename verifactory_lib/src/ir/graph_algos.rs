@@ -67,7 +67,7 @@ trait ShrinkNodes {
 /// Trait exposing the simplification and exporting of the IR graph
 pub trait FlowGraphFun {
     fn simplify(&mut self, exclude_list: &[EntityId], strength: CoalesceStrength);
-    fn to_svg(&self, path: &str) -> anyhow::Result<()>;
+    fn to_png(&self, path: &str) -> anyhow::Result<()>;
 }
 
 impl FlowGraphFun for FlowGraph {
@@ -85,12 +85,12 @@ impl FlowGraphFun for FlowGraph {
         }
     }
 
-    fn to_svg(&self, path: &str) -> anyhow::Result<()> {
-        let svg = exec_dot(
+    fn to_png(&self, path: &str) -> anyhow::Result<()> {
+        let png = exec_dot(
             format!("{:?}", Dot::with_config(self, &[])),
-            vec![Format::Svg.into()],
+            vec![Format::Png.into()],
         )?;
-        File::create(path)?.write_all(&svg)?;
+        File::create(path)?.write_all(&png)?;
         Ok(())
     }
 }

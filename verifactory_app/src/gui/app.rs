@@ -327,11 +327,11 @@ impl eframe::App for MyApp {
 
             ui.label("\n");
 
-            if ui.button("Save svg").clicked() {
-                self.generate_graph(false).to_svg("out.svg").unwrap();
+            if ui.button("Save png").clicked() {
+                self.generate_graph(false).to_png("out.png").unwrap();
             }
-            if ui.button("Save reversed svg").clicked() {
-                self.generate_graph(true).to_svg("out.svg").unwrap();
+            if ui.button("Save reversed png").clicked() {
+                self.generate_graph(true).to_png("out.png").unwrap();
             }
             ui.label("\n");
         });
