@@ -142,12 +142,11 @@ impl MyApp {
 
         println!("Remove list: {:?}", removed);
 
-        graph.simplify(&removed, CoalesceStrength::Aggressive);
         if reversed {
-            Reversable::reverse(&graph)
-        } else {
-            graph
+            graph = Reversable::reverse(&graph);
         }
+        graph.simplify(&removed, CoalesceStrength::Aggressive);
+        graph
     }
 
     pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
