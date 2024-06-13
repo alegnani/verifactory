@@ -15,7 +15,7 @@ use super::model_entities::{Z3Edge, Z3Node};
 #[derive(Default)]
 pub struct Z3QuantHelper<'a> {
     pub edge_map: HashMap<EdgeIndex, Real<'a>>,
-    pub input_map: HashMap<NodeIndex, Int<'a>>,
+    pub input_map: HashMap<NodeIndex, Real<'a>>,
     pub output_map: HashMap<NodeIndex, Real<'a>>,
     pub input_const: Vec<Bool<'a>>,
     pub others: Vec<Bool<'a>>,
@@ -32,9 +32,9 @@ pub struct ProofPrimitives<'a> {
     /// Flowgraph associated with the proof
     pub graph: &'a FlowGraph,
     /// `Vec` of all the input throughput variables in z3
-    pub input_bounds: Vec<Int<'a>>,
+    pub input_bounds: Vec<Real<'a>>,
     /// Map from `NodeIndex` to the associated throughput variable in z3
-    pub input_map: HashMap<NodeIndex, Int<'a>>,
+    pub input_map: HashMap<NodeIndex, Real<'a>>,
     /// `Vec` of all the output throughput variables in z3
     pub output_bounds: Vec<Real<'a>>,
     /// Map from `NodeIndex` to the associated throughput variable in z3
@@ -117,12 +117,15 @@ where
     let res: ProofResult = solver.check().into();
     // TODO: move to tracing
     // println!("Solver:\n{:?}", solver);
-    // println!("Model:\n{:?}", solver.get_model());
     if let Some(model) = solver.get_model() {
         for input in primitives.input_bounds {
             let a = model.eval(&input, true);
             println!("{:?}: {:?}", &input, a);
         }
+        //     for input in primitives.edge_bounds {
+        //         let a = model.eval(&input, true);
+        //         println!("{:?}: {:?}", &input, a);
+        //     }
     }
     res.not()
 }
@@ -236,7 +239,7 @@ pub fn throughput_unlimited<'a>(
     entities: Vec<FBEntity<i32>>,
 ) -> impl Fn(ProofPrimitives<'a>) -> Bool<'a> {
     let i = move |p: ProofPrimitives<'a>| {
-        let zero = Int::from_i64(p.ctx, 0);
+        let zero = Real::from_real(p.ctx, 0, 1);
         // `input_condition` adds the following constraint to all inputs (0 <= input <= capacity)
         let input_constraints = p
             .input_map
@@ -250,15 +253,14 @@ pub fn throughput_unlimited<'a>(
                     .find(|e| e.get_base().id == entity_id)
                     .unwrap()
                     .get_base()
-                    .throughput as i64;
-                let upper_const = Int::from_i64(p.ctx, capacity);
+                    .throughput;
+                let upper_const = Real::from_real(p.ctx, capacity as i32, 1); // FIXME: this cast is shady, possibly errors
                 let upper = v.le(&upper_const);
                 Bool::and(p.ctx, &[&lower, &upper])
             })
             .collect::<Vec<_>>();
         let input_condition = vec_and(p.ctx, &input_constraints);
 
-        let zero = Real::from_int(&zero);
         // `output_condition` adds the following constraint to all outputs (0 <= output <= capacity)
         let output_constraints = p
             .output_map
@@ -289,7 +291,7 @@ pub fn throughput_unlimited<'a>(
 
         let inputs = p.input_map.values().collect::<Vec<_>>();
         let input_sum = if !inputs.is_empty() {
-            Real::from_int(&Int::add(p.ctx, &inputs))
+            Real::add(p.ctx, &inputs)
         } else {
             zero
         };

@@ -114,15 +114,14 @@ impl Z3Node for Input {
     ) {
         /* create new input variable */
         let input_name = format!("input_{}", self.id);
-        let input = Int::new_const(ctx, input_name);
-        let input_real = Real::from_int(&input);
-        helper.input_map.insert(idx, input);
+        let input = Real::new_const(ctx, input_name);
+        helper.input_map.insert(idx, input.clone());
 
         /* kirchhoff on input and out-edge */
         let out_idx = graph.out_edge_idx(idx)[0];
         let out = helper.edge_map.get(&out_idx).unwrap();
 
-        let ast = input_real._eq(out);
+        let ast = input._eq(out);
         helper.others.push(ast);
 
         if flags.contains(ModelFlags::Blocked) {
