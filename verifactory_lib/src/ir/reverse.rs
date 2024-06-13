@@ -72,7 +72,7 @@ mod test {
 
     #[test]
     fn reverse_3_2() {
-        let entities = file_to_entities("tests/3-2").unwrap();
+        let entities = file_to_entities("blueprints/3-2").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3], Aggressive);
         let rev = graph.reverse();

@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn feeds_to() {
-        let entities = load("tests/feeds_from");
+        let entities = load("blueprints/feeds_from");
         let ctx = Compiler::new(entities);
         let feeds_to = ctx.feeds_to_reachability();
         let feeds_from = ctx.feeds_from_reachability();
@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn inputs_generation() {
-        let entities = load("tests/input_output_gen");
+        let entities = load("blueprints/input_output_gen");
         let ctx = Compiler::new(entities);
         let inputs = ctx.find_input_positions();
         println!("{:?}", inputs);
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn outputs_generation() {
-        let entities = load("tests/input_output_gen");
+        let entities = load("blueprints/input_output_gen");
         let ctx = Compiler::new(entities);
         let outputs = ctx.find_output_positions();
         println!("{:?}", outputs);
@@ -421,7 +421,7 @@ mod tests {
 
     #[test]
     fn compile_splitter() {
-        let entities = load("tests/input_output_gen");
+        let entities = load("blueprints/input_output_gen");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
         println!("{:?}", Dot::with_config(&graph, &[]));
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn graph_test() {
-        let entities = load("tests/graph_test");
+        let entities = load("blueprints/graph_test");
         let ctx = Compiler::new(entities);
         let graph = ctx.create_graph();
         println!("{:?}", Dot::with_config(&graph, &[]));
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn belt_weave() {
-        let entities = load("tests/belt_weave");
+        let entities = load("blueprints/belt_weave");
         let ctx = Compiler::new(entities);
         let mut graph = ctx.create_graph();
         graph.simplify(&[], crate::ir::CoalesceStrength::Aggressive);

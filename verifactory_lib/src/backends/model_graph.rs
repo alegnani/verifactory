@@ -346,7 +346,7 @@ mod tests {
     // TODO: figure out lifetimes and fix code duplication
     #[test]
     fn is_balancer_3_2_broken() {
-        let entities = file_to_entities("tests/3-2-broken").unwrap();
+        let entities = file_to_entities("blueprints/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4, 5, 6], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn is_balancer_4_4() {
-        let entities = file_to_entities("tests/4-4").unwrap();
+        let entities = file_to_entities("blueprints/4-4").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn is_throughput_unlimited_4_4() {
-        let entities = file_to_entities("tests/4-4-tu").unwrap();
+        let entities = file_to_entities("blueprints/4-4-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn not_throughput_unlimited_4_4() {
-        let entities = file_to_entities("tests/4-4-ntu").unwrap();
+        let entities = file_to_entities("blueprints/4-4-ntu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn is_throughput_unlimited_6_3() {
-        let entities = file_to_entities("tests/6-3-tu").unwrap();
+        let entities = file_to_entities("blueprints/6-3-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[24, 36, 44], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -421,7 +421,7 @@ mod tests {
 
     #[test]
     fn not_throughput_unlimited_6_3() {
-        let entities = file_to_entities("tests/6-3-ntu").unwrap();
+        let entities = file_to_entities("blueprints/6-3-ntu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[25, 26], CoalesceStrength::Aggressive);
         let cfg = Config::new();
@@ -438,7 +438,7 @@ mod tests {
 
     #[test]
     fn is_universal_4_4_univ() {
-        let entities = file_to_entities("tests/4-4-univ").unwrap();
+        let entities = file_to_entities("blueprints/4-4-univ").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(
             &[30, 33, 83, 55, 17, 46, 133, 71],
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn not_universal_4_4() {
-        let entities = file_to_entities("tests/4-4-tu").unwrap();
+        let entities = file_to_entities("blueprints/4-4-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
         let cfg = Config::new();

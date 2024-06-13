@@ -336,7 +336,7 @@ mod test {
 
     #[test]
     fn test_shrinking() {
-        let entities = file_to_entities("tests/3-2-broken").unwrap();
+        let entities = file_to_entities("blueprints/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.remove_false_io(&[]);
         graph.simplify(&[4, 5, 6], Aggressive);
@@ -346,7 +346,7 @@ mod test {
 
     #[test]
     fn belt_reduction() {
-        let entities = file_to_entities("tests/belt_reduction").unwrap();
+        let entities = file_to_entities("blueprints/belt_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[], Aggressive);
         assert_eq!(graph.node_count(), 2);
@@ -356,7 +356,7 @@ mod test {
 
     #[test]
     fn splitter_reduction() {
-        let entities = file_to_entities("tests/splitter_reduction").unwrap();
+        let entities = file_to_entities("blueprints/splitter_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4], Aggressive);
         assert_eq!(graph.node_count(), 4);
@@ -365,7 +365,7 @@ mod test {
 
     #[test]
     fn splitter_merger_reduction() {
-        let entities = file_to_entities("tests/splitter_merger_reduction").unwrap();
+        let entities = file_to_entities("blueprints/splitter_merger_reduction").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4, 5], Aggressive);
         assert_eq!(graph.node_count(), 16);
@@ -374,7 +374,7 @@ mod test {
 
     #[test]
     fn prio_splitter() {
-        let entities = file_to_entities("tests/prio_splitter").unwrap();
+        let entities = file_to_entities("blueprints/prio_splitter").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[], Aggressive);
     }

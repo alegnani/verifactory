@@ -286,12 +286,12 @@ mod tests {
     use super::*;
     use std::fs;
     fn get_belt_entities() -> Vec<FBEntity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/belts").unwrap();
+        let blueprint_string = fs::read_to_string("blueprints/belts").unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
 
     fn get_assembly_entities() -> Vec<FBEntity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/inserter_assembler").unwrap();
+        let blueprint_string = fs::read_to_string("blueprints/inserter_assembler").unwrap();
         string_to_entities(&blueprint_string).unwrap()
     }
 
