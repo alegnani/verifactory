@@ -54,19 +54,19 @@ where
 #[repr(u8)]
 pub enum Direction {
     North = 0,
-    East = 2,
-    South = 4,
-    West = 6,
+    East = 4,
+    South = 8,
+    West = 12,
 }
 
 impl Direction {
     /// Returns a new `Direction` rotated in the given direction
     pub fn rotate(&self, direction: Rotation, amount: u8) -> Self {
         let incr = match direction {
-            Rotation::Clockwise => 2,
-            Rotation::Anticlockwise => 6,
+            Rotation::Clockwise => 4,
+            Rotation::Anticlockwise => 12,
         };
-        let new_u8 = (*self as u8 + amount * incr) % 8;
+        let new_u8 = (*self as u8 + amount * incr) % 16;
         new_u8.into()
     }
 
@@ -89,9 +89,9 @@ impl From<u8> for Direction {
     fn from(value: u8) -> Self {
         match value {
             0 => Self::North,
-            2 => Self::East,
-            4 => Self::South,
-            6 => Self::West,
+            4 => Self::East,
+            8 => Self::South,
+            12 => Self::West,
             _ => panic!("Direction is not in cardinal direction: ({})", value),
         }
     }
