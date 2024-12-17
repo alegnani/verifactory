@@ -22,7 +22,8 @@
       {
         devShells.default = mkShell rec {
           buildInputs = [
-            rust   
+            cmake
+            rust
             z3
             wayland
             libGL

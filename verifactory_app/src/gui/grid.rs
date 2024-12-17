@@ -138,7 +138,7 @@ impl MyApp {
         if !(is_input || is_output) {
             return;
         }
-        let rotation = base.direction as u8 as f32 * PI / 4.;
+        let rotation = base.direction.radians();
         let color = if is_input {
             Color32::LIGHT_GREEN
         } else {
@@ -162,7 +162,7 @@ impl MyApp {
 
     fn draw_prio(&self, ui: &mut egui::Ui, rect: Rect, splitter: &FBSplitter<i32>) {
         let base = splitter.base;
-        let rotation = base.direction as u8 as f32 * PI / 4.;
+        let rotation = base.direction.radians();
         let color = Color32::YELLOW;
         let img = Image::new(egui::include_image!("../../imgs/arrow.svg"))
             .rotate(rotation, Vec2::splat(0.5))
@@ -182,7 +182,7 @@ impl MyApp {
 
     fn get_entity_img(entity: &FBEntity<i32>, belt_rotation: Option<Rotation>) -> Image {
         let base = entity.get_base();
-        let rotation = base.direction as u8 as f32 * PI / 4.;
+        let rotation = base.direction.radians();
         match entity {
             FBEntity::Splitter(_) => match base.direction {
                 Direction::North => {
