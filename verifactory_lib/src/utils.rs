@@ -1,6 +1,9 @@
 //! Various generic utilities
 
-use std::ops::{Add, Neg, Sub};
+use std::{
+    f32::consts::PI,
+    ops::{Add, Neg, Sub},
+};
 
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
@@ -77,6 +80,11 @@ impl Direction {
             Priority::Left => self.rotate(Rotation::Anticlockwise, 1),
             Priority::Right => self.rotate(Rotation::Clockwise, 1),
         }
+    }
+
+    /// Returns the direction in radians
+    pub fn radians(&self) -> f32 {
+        *self as u8 as f32 * PI / 8.
     }
 
     /// Returns a new `Direction` pointing in the opposite direction
