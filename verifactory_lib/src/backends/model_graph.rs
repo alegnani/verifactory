@@ -3,7 +3,7 @@ use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::{collections::HashMap, mem};
 use z3::{
     ast::{exists_const, forall_const, Ast, Bool, Int, Real},
-    Context, Solver,
+    Solver,
 };
 
 use crate::{entities::FBEntity, ir::FlowGraph};
@@ -13,42 +13,40 @@ use super::proofs::ProofResult;
 use super::model_entities::{Z3Edge, Z3Node};
 
 #[derive(Default)]
-pub struct Z3QuantHelper<'a> {
-    pub edge_map: HashMap<EdgeIndex, Real<'a>>,
-    pub input_map: HashMap<NodeIndex, Int<'a>>,
-    pub output_map: HashMap<NodeIndex, Real<'a>>,
-    pub input_const: Vec<Bool<'a>>,
-    pub others: Vec<Bool<'a>>,
-    pub blocked_edge_map: HashMap<EdgeIndex, Bool<'a>>,
-    pub blocked_input_map: HashMap<NodeIndex, Bool<'a>>,
-    pub blocked_output_map: HashMap<NodeIndex, Bool<'a>>,
-    pub blocking: Vec<Bool<'a>>,
+pub struct Z3QuantHelper {
+    pub edge_map: HashMap<EdgeIndex, Real>,
+    pub input_map: HashMap<NodeIndex, Int>,
+    pub output_map: HashMap<NodeIndex, Real>,
+    pub input_const: Vec<Bool>,
+    pub others: Vec<Bool>,
+    pub blocked_edge_map: HashMap<EdgeIndex, Bool>,
+    pub blocked_input_map: HashMap<NodeIndex, Bool>,
+    pub blocked_output_map: HashMap<NodeIndex, Bool>,
+    pub blocking: Vec<Bool>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ProofPrimitives<'a> {
-    /// Z3 context
-    pub ctx: &'a Context,
     /// Flowgraph associated with the proof
     pub graph: &'a FlowGraph,
     /// `Vec` of all the input throughput variables in z3
-    pub input_bounds: Vec<Int<'a>>,
+    pub input_bounds: Vec<Int>,
     /// Map from `NodeIndex` to the associated throughput variable in z3
-    pub input_map: HashMap<NodeIndex, Int<'a>>,
+    pub input_map: HashMap<NodeIndex, Int>,
     /// `Vec` of all the output throughput variables in z3
-    pub output_bounds: Vec<Real<'a>>,
+    pub output_bounds: Vec<Real>,
     /// Map from `NodeIndex` to the associated throughput variable in z3
-    pub output_map: HashMap<NodeIndex, Real<'a>>,
+    pub output_map: HashMap<NodeIndex, Real>,
     /// Map from `NodeIndex` to the associated input blocked variable in z3
-    pub blocked_input_map: HashMap<NodeIndex, Bool<'a>>,
+    pub blocked_input_map: HashMap<NodeIndex, Bool>,
     /// Map from `NodeIndex` to the associated output blocked variable in z3
-    pub blocked_output_map: HashMap<NodeIndex, Bool<'a>>,
+    pub blocked_output_map: HashMap<NodeIndex, Bool>,
     /// min. and max. throughput of an edge constraint
-    pub edge_bounds: Vec<Real<'a>>,
+    pub edge_bounds: Vec<Real>,
     /// constraints like kirchhoffs law or implementation of splitters
-    pub model_constraint: Bool<'a>,
+    pub model_constraint: Bool,
     /// blocking constraints
-    pub blocking_constraint: Vec<Bool<'a>>,
+    pub blocking_constraint: Vec<Bool>,
 }
 
 bitflags! {
@@ -59,27 +57,22 @@ bitflags! {
     }
 }
 
-pub fn model_f<'a, F>(
-    graph: &'a FlowGraph,
-    ctx: &'a Context,
-    f: F,
-    flags: ModelFlags,
-) -> ProofResult
+pub fn model_f<'a, F>(graph: &'a FlowGraph, f: F, flags: ModelFlags) -> ProofResult
 where
-    F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
+    F: FnOnce(ProofPrimitives<'a>) -> Bool,
 {
-    let solver = Solver::new(ctx);
+    let solver = Solver::new();
 
     let mut helper = Z3QuantHelper::default();
     // encode edges as variables in z3
     for edge_idx in graph.edge_indices() {
         let edge = graph[edge_idx];
-        edge.model(graph, edge_idx, ctx, &mut helper, flags);
+        edge.model(graph, edge_idx, &mut helper, flags);
     }
     // encode nodes as equations
     for node_idx in graph.node_indices() {
         let node = &graph[node_idx];
-        node.model(graph, node_idx, ctx, &mut helper, flags);
+        node.model(graph, node_idx, &mut helper, flags);
     }
 
     // add stuff to solver
@@ -95,12 +88,11 @@ where
     let edge_map = mem::take(&mut helper.edge_map);
     let edge_bounds = edge_map.values().cloned().collect::<Vec<_>>();
 
-    let model_constraint = vec_and(ctx, &helper.others);
+    let model_constraint = vec_and(&helper.others);
 
     let blocking_constraint = helper.blocking;
 
     let primitives = ProofPrimitives {
-        ctx,
         graph,
         input_bounds,
         input_map,
@@ -128,22 +120,22 @@ where
 }
 
 /// Conjunction of a slice of `Bool`s.
-pub fn vec_and<'a>(ctx: &'a Context, vec: &[Bool<'a>]) -> Bool<'a> {
+pub fn vec_and<'a>(vec: &[Bool]) -> Bool {
     let slice = vec.iter().collect::<Vec<_>>();
-    Bool::and(ctx, &slice)
+    Bool::and(&slice)
 }
 
 /// Equality of a slice of `Ast`s.
-pub fn equality<'a, T>(ctx: &'a Context, values: &[T]) -> Bool<'a>
+pub fn equality<'a, T>(values: &'a [T]) -> Bool
 where
-    T: Ast<'a> + Sized,
+    T: Ast + Sized + std::convert::From<&'a T> + 'a,
 {
     let pairwise_eq = values
         .windows(2)
-        .map(|w| w[0]._eq(&w[1]))
+        .map(|w| w[0].eq(&w[1]))
         .collect::<Vec<_>>();
     let slice = pairwise_eq.iter().collect::<Vec<_>>();
-    Bool::and(ctx, &slice)
+    Bool::and(&slice)
 }
 
 /// Function to prove if a given z3 model is a valid belt balancer
@@ -154,10 +146,10 @@ where
 ///
 /// The `balancer_condition` states that all the outputs have the same value.
 /// Finding values s.t. the model is satisfied and output equality is not achieve, constitues a counter-example.
-pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool<'_> {
-    let balancer_condition = equality(p.ctx, &p.output_bounds);
+pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool {
+    let balancer_condition = equality(&p.output_bounds);
     // Correct model and NOT output equality
-    Bool::and(p.ctx, &[&balancer_condition.not(), &p.model_constraint])
+    Bool::and(&[&balancer_condition.not(), &p.model_constraint])
 }
 
 /// Function to prove if a given z3 model is an equal drain belt balancer
@@ -175,23 +167,20 @@ pub fn belt_balancer_f(p: ProofPrimitives<'_>) -> Bool<'_> {
 ///
 /// The `model_condition` states that the z3 model is modelled correctly and that equality of inputs does NOT imply equality of outputs.
 /// This is used to find a counter-example.
-pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool<'_> {
-    let input_eq = equality(p.ctx, &p.input_bounds);
-    let output_eq = equality(p.ctx, &p.output_bounds);
+pub fn equal_drain_f(p: ProofPrimitives<'_>) -> Bool {
+    let input_eq = equality(&p.input_bounds);
+    let output_eq = equality(&p.output_bounds);
     // Correct model and equality of inputs does NOT imply equality of outputs
-    Bool::and(
-        p.ctx,
-        &[&p.model_constraint, &input_eq.implies(&output_eq).not()],
-    )
+    Bool::and(&[&p.model_constraint, &input_eq.implies(&output_eq).not()])
 }
 
 // TODO: figure out lifetimes and fix code duplication
 fn capacity_bound<'a, 'b>(
     p: &'a ProofPrimitives<'a>,
     entities: &[FBEntity<i32>],
-    iter: impl Iterator<Item = (&'b NodeIndex, &'a Real<'a>)>,
-) -> Bool<'a> {
-    let zero = Real::from_real(p.ctx, 0, 1);
+    iter: impl Iterator<Item = (&'b NodeIndex, &'a Real)>,
+) -> Bool {
+    let zero = Real::from_rational(0, 1);
     let conditions = iter
         .map(|(idx, v)| {
             let lower = v.ge(&zero);
@@ -203,12 +192,12 @@ fn capacity_bound<'a, 'b>(
                 .unwrap()
                 .get_base()
                 .throughput as i64;
-            let upper_const = Real::from_int(&Int::from_i64(p.ctx, capacity));
+            let upper_const = Real::from_int(&Int::from_i64(capacity));
             let upper = v.le(&upper_const);
-            Bool::and(p.ctx, &[&lower, &upper])
+            Bool::and(&[&lower, &upper])
         })
         .collect::<Vec<_>>();
-    vec_and(p.ctx, &conditions)
+    vec_and(&conditions)
 }
 
 /// Function that generates a function to prove if a given z3 model is a throughput unlimited belt balancer
@@ -234,9 +223,9 @@ fn capacity_bound<'a, 'b>(
 /// ```
 pub fn throughput_unlimited<'a>(
     entities: Vec<FBEntity<i32>>,
-) -> impl Fn(ProofPrimitives<'a>) -> Bool<'a> {
+) -> impl Fn(ProofPrimitives<'a>) -> Bool {
     let i = move |p: ProofPrimitives<'a>| {
-        let zero = Int::from_i64(p.ctx, 0);
+        let zero = Int::from_i64(0);
         // `input_condition` adds the following constraint to all inputs (0 <= input <= capacity)
         let input_constraints = p
             .input_map
@@ -251,12 +240,12 @@ pub fn throughput_unlimited<'a>(
                     .unwrap()
                     .get_base()
                     .throughput as i64;
-                let upper_const = Int::from_i64(p.ctx, capacity);
+                let upper_const = Int::from_i64(capacity);
                 let upper = v.le(&upper_const);
-                Bool::and(p.ctx, &[&lower, &upper])
+                Bool::and(&[&lower, &upper])
             })
             .collect::<Vec<_>>();
-        let input_condition = vec_and(p.ctx, &input_constraints);
+        let input_condition = vec_and(&input_constraints);
 
         let zero = Real::from_int(&zero);
         // `output_condition` adds the following constraint to all outputs (0 <= output <= capacity)
@@ -273,28 +262,28 @@ pub fn throughput_unlimited<'a>(
                     .unwrap()
                     .get_base()
                     .throughput as i64;
-                let upper_const = Real::from_int(&Int::from_i64(p.ctx, capacity));
+                let upper_const = Real::from_int(&Int::from_i64(capacity));
                 let upper = v.le(&upper_const);
-                Bool::and(p.ctx, &[&lower, &upper])
+                Bool::and(&[&lower, &upper])
             })
             .collect::<Vec<_>>();
-        let output_condition = vec_and(p.ctx, &output_constraints);
+        let output_condition = vec_and(&output_constraints);
 
         let outputs = p.output_map.values().collect::<Vec<_>>();
         let output_sum = if !outputs.is_empty() {
-            Real::add(p.ctx, &outputs)
+            Real::add(&outputs)
         } else {
             zero.clone()
         };
 
         let inputs = p.input_map.values().collect::<Vec<_>>();
         let input_sum = if !inputs.is_empty() {
-            Real::from_int(&Int::add(p.ctx, &inputs))
+            Real::from_int(&Int::add(&inputs))
         } else {
             zero
         };
 
-        let in_out_eq = input_sum._eq(&output_sum);
+        let in_out_eq = input_sum.eq(&output_sum);
 
         // Model edge throughput as existentially quantified variables
         let cast_edge_bounds = p
@@ -303,34 +292,28 @@ pub fn throughput_unlimited<'a>(
             .map(|r| r as &dyn Ast)
             .collect::<Vec<_>>();
 
-        let no_model = forall_const(p.ctx, &cast_edge_bounds, &[], &p.model_constraint.not());
+        let no_model = forall_const(&cast_edge_bounds, &[], &p.model_constraint.not());
 
-        Bool::and(
-            p.ctx,
-            &[&input_condition, &output_condition, &in_out_eq, &no_model],
-        )
+        Bool::and(&[&input_condition, &output_condition, &in_out_eq, &no_model])
     };
     i
 }
 
 /// input, output, blocked. BLOCKING, MODEL and not OUT_EQ
-pub fn universal_balancer(p: ProofPrimitives<'_>) -> Bool<'_> {
-    let eq_value = Real::new_const(p.ctx, "output_value");
+pub fn universal_balancer(p: ProofPrimitives<'_>) -> Bool {
+    let eq_value = Real::new_const("output_value");
     let outputs_eq_value = p
         .output_map
         .iter()
         .map(|(idx, output)| {
             let is_blocked = p.blocked_output_map.get(idx).unwrap();
-            is_blocked.not().implies(&output._eq(&eq_value))
+            is_blocked.not().implies(&output.eq(&eq_value))
         })
         .collect::<Vec<_>>();
-    let out_eq = vec_and(p.ctx, &outputs_eq_value);
-    let out_eq_condition = exists_const(p.ctx, &[&eq_value], &[], &out_eq);
-    let blocking_p = vec_and(p.ctx, &p.blocking_constraint);
-    Bool::and(
-        p.ctx,
-        &[&blocking_p, &p.model_constraint, &out_eq_condition.not()],
-    )
+    let out_eq = vec_and(&outputs_eq_value);
+    let out_eq_condition = exists_const(&[&eq_value], &[], &out_eq);
+    let blocking_p = vec_and(&p.blocking_constraint);
+    Bool::and(&[&blocking_p, &p.model_constraint, &out_eq_condition.not()])
 }
 
 #[cfg(test)]
@@ -347,9 +330,7 @@ mod tests {
         let entities = file_to_entities("tests/3-2-broken").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[4, 5, 6], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+        let res = model_f(&graph, belt_balancer_f, ModelFlags::empty());
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Unsat));
     }
@@ -359,9 +340,7 @@ mod tests {
         let entities = file_to_entities("tests/4-4").unwrap();
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[3], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+        let res = model_f(&graph, belt_balancer_f, ModelFlags::empty());
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Sat));
     }
@@ -371,14 +350,7 @@ mod tests {
         let entities = file_to_entities("tests/4-4-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(
-            &graph,
-            &ctx,
-            throughput_unlimited(entities),
-            ModelFlags::Relaxed,
-        );
+        let res = model_f(&graph, throughput_unlimited(entities), ModelFlags::Relaxed);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Sat));
     }
@@ -388,14 +360,7 @@ mod tests {
         let entities = file_to_entities("tests/4-4-ntu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(
-            &graph,
-            &ctx,
-            throughput_unlimited(entities),
-            ModelFlags::Relaxed,
-        );
+        let res = model_f(&graph, throughput_unlimited(entities), ModelFlags::Relaxed);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Unsat));
     }
@@ -405,14 +370,7 @@ mod tests {
         let entities = file_to_entities("tests/6-3-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[24, 36, 44], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(
-            &graph,
-            &ctx,
-            throughput_unlimited(entities),
-            ModelFlags::Relaxed,
-        );
+        let res = model_f(&graph, throughput_unlimited(entities), ModelFlags::Relaxed);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Sat));
     }
@@ -422,14 +380,7 @@ mod tests {
         let entities = file_to_entities("tests/6-3-ntu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[25, 26], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(
-            &graph,
-            &ctx,
-            throughput_unlimited(entities),
-            ModelFlags::Relaxed,
-        );
+        let res = model_f(&graph, throughput_unlimited(entities), ModelFlags::Relaxed);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Unsat));
     }
@@ -442,9 +393,7 @@ mod tests {
             &[30, 33, 83, 55, 17, 46, 133, 71],
             CoalesceStrength::Aggressive,
         );
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
+        let res = model_f(&graph, universal_balancer, ModelFlags::Blocked);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Sat));
     }
@@ -454,9 +403,7 @@ mod tests {
         let entities = file_to_entities("tests/4-4-tu").unwrap();
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, universal_balancer, ModelFlags::Blocked);
+        let res = model_f(&graph, universal_balancer, ModelFlags::Blocked);
         println!("Result: {}", res);
         assert!(matches!(res, ProofResult::Unsat));
     }
@@ -466,9 +413,7 @@ mod tests {
         let entities = vec![];
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, belt_balancer_f, ModelFlags::empty());
+        let res = model_f(&graph, belt_balancer_f, ModelFlags::empty());
         assert!(matches!(res, ProofResult::Sat));
     }
 
@@ -477,9 +422,7 @@ mod tests {
         let entities = vec![];
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::empty());
+        let res = model_f(&graph, equal_drain_f, ModelFlags::empty());
         assert!(matches!(res, ProofResult::Sat));
     }
 
@@ -488,14 +431,7 @@ mod tests {
         let entities = vec![];
         let mut graph = Compiler::new(entities.clone()).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(
-            &graph,
-            &ctx,
-            throughput_unlimited(entities),
-            ModelFlags::Relaxed,
-        );
+        let res = model_f(&graph, throughput_unlimited(entities), ModelFlags::Relaxed);
         assert!(matches!(res, ProofResult::Sat));
     }
 
@@ -504,9 +440,7 @@ mod tests {
         let entities = vec![];
         let mut graph = Compiler::new(entities).create_graph();
         graph.simplify(&[], CoalesceStrength::Aggressive);
-        let cfg = Config::new();
-        let ctx = Context::new(&cfg);
-        let res = model_f(&graph, &ctx, equal_drain_f, ModelFlags::Blocked);
+        let res = model_f(&graph, equal_drain_f, ModelFlags::Blocked);
         assert!(matches!(res, ProofResult::Sat));
     }
 }
