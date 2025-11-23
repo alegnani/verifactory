@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use egui::{Align2, Direction, Event, InputState, Key};
+use egui::{Event, InputState, Key};
 use egui_file::FileDialog;
 use egui_toast::{Toast, ToastOptions, Toasts};
 
@@ -172,11 +172,11 @@ impl MyApp {
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Set up toast notifications in the top right
         let mut toasts = Toasts::new()
-            .anchor(Align2::RIGHT_TOP, (-10.0, 10.0))
-            .direction(Direction::TopDown);
+            .anchor(egui::Align2::RIGHT_TOP, (-10.0, 10.0))
+            .direction(egui::Direction::TopDown);
 
         self.draw_menu(ctx);
 
@@ -192,6 +192,7 @@ impl eframe::App for MyApp {
                         text: "Failed to load blueprint from clipboard!".into(),
                         kind: egui_toast::ToastKind::Error,
                         options: ToastOptions::default().duration_in_seconds(10.0),
+                        ..Default::default()
                     });
                 }
             }

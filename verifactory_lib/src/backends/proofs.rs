@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use z3::{ast::Bool, Config, Context, SatResult};
+use z3::{ast::Bool, SatResult};
 
 use crate::ir::FlowGraph;
 
@@ -45,19 +45,13 @@ impl Display for ProofResult {
 }
 
 pub struct BlueprintProofEntity {
-    _cfg: Config,
-    ctx: Context,
     graph: FlowGraph,
     result: Option<ProofResult>,
 }
 
 impl BlueprintProofEntity {
     pub fn new(graph: FlowGraph) -> Self {
-        let _cfg = Config::new();
-        let ctx = Context::new(&_cfg);
         Self {
-            _cfg,
-            ctx,
             graph,
             result: None,
         }
@@ -65,9 +59,9 @@ impl BlueprintProofEntity {
 
     pub fn model<'a, F>(&'a mut self, f: F, flags: ModelFlags) -> ProofResult
     where
-        F: FnOnce(ProofPrimitives<'a>) -> Bool<'a>,
+        F: FnOnce(ProofPrimitives<'a>) -> Bool,
     {
-        let res = model_f(&self.graph, &self.ctx, f, flags).into();
+        let res = model_f(&self.graph, f, flags).into();
         self.result = Some(res);
         res
     }

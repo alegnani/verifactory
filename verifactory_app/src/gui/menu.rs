@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use egui::{Ui, Window};
+use egui::{Ui, UiKind, Window};
 use egui_file::FileDialog;
 
 use super::app::MyApp;
@@ -38,19 +38,19 @@ impl MyApp {
                 self.blueprint_string.open = false;
             }
 
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 /* File submenu */
                 ui.menu_button("File", |ui| {
                     /* Open blueprint button, opens file dialog */
                     if ui.button("Open blueprint file").clicked() {
-                        ui.close_menu();
+                        ui.close_kind(UiKind::Menu);
                         let mut dialog =
                             FileDialog::open_file(self.open_file_state.opened_file.clone());
                         dialog.open();
                         self.open_file_state.open_file_dialog = Some(dialog);
                     }
                     if ui.button("Open blueprint").clicked() {
-                        ui.close_menu();
+                        ui.close_kind(UiKind::Menu);
                         self.blueprint_string = BlueprintString {
                             open: true,
                             should_load: false,

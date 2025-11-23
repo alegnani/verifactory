@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use egui::{Color32, Image, Pos2, Rect, Sense, Vec2};
 
 use verifactory_lib::{
@@ -180,7 +178,7 @@ impl MyApp {
         ui.put(rect, img);
     }
 
-    fn get_entity_img(entity: &FBEntity<i32>, belt_rotation: Option<Rotation>) -> Image {
+    fn get_entity_img(entity: &FBEntity<i32>, belt_rotation: Option<Rotation>) -> Image<'_> {
         let base = entity.get_base();
         let rotation = base.direction.radians();
         match entity {

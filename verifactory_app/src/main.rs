@@ -12,7 +12,7 @@ pub fn main() -> Result<(), eframe::Error> {
         NativeOptions::default(),
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Box::<MyApp>::default()
+            Ok(Box::<MyApp>::default())
         }),
     )
 }
