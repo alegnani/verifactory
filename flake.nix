@@ -3,9 +3,12 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     crane.url = "github:ipetkov/crane";
-    utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
@@ -18,10 +21,10 @@
       nixpkgs,
       crane,
       rust-overlay,
-      utils,
+      flake-utils,
       advisory-db,
     }:
-    utils.lib.eachDefaultSystem (
+    flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs {
@@ -50,6 +53,7 @@
 
           nativeBuildInputs = with pkgs; [
             pkg-config
+            makeWrapper
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -57,6 +61,14 @@
 
         # Build the dependencies
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        individualCrateArgs = commonArgs // {
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+
+          # Don't run tests normally: cargo-nextest runs them
+          doCheck = false;
+        };
 
         fileSetForCrate =
           crate:
@@ -71,20 +83,11 @@
             ];
           };
         verifactory_app = craneLib.buildPackage (
-          commonArgs
+          individualCrateArgs
           // rec {
-            inherit cargoArtifacts;
-            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./verifactory_app/Cargo.toml; })
-              pname
-              version
-              ;
+            pname = "verifactory_app";
             cargoExtraArgs = "-p verifactory_app";
             src = fileSetForCrate ./verifactory_app;
-
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-              makeWrapper
-            ];
 
             dlopenDeps = with pkgs; [
               wayland
@@ -97,9 +100,6 @@
                 --prefix LD_LIBRARY_PATH : ${LD_LIBRARY_PATH}
             '';
             LD_LIBRARY_PATH = "${lib.makeLibraryPath dlopenDeps}";
-
-            # Don't run tests normally: cargo-nextest runs them
-            doCheck = false;
           }
         );
       in
@@ -158,9 +158,21 @@
 
         defaultPackage = packages.verifactory_app;
 
-        devShells.default = craneLib.devShell {
+        apps.default = flake-utils.lib.mkApp {
+          name = "verifactory_app";
+          drv = verifactory_app;
+        };
+
+        devShells.default = craneLib.devShell rec {
           checks = self.checks.${system};
 
+          dlopenDeps = with pkgs; [
+            wayland
+            libGL
+            libxkbcommon
+          ];
+
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath dlopenDeps}";
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
       }

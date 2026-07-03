@@ -10,3 +10,10 @@ codegen-units = 1
 
 [profile.dev]
 opt-level = 1 # TODO: Is `opt-level = 0` fast enough?
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.metadata.crane]
+name = "verifactory"
