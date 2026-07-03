@@ -1,7 +1,12 @@
 [workspace]
 resolver = "2"
-members = [ "verifactory_app","verifactory_lib"]
+members = [ "verifactory_app", "verifactory_lib" ]
 
 [profile.release]
-lto = true
-strip = true
+opt-level = 3
+lto = "fat"
+strip = "symbols"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1 # TODO: Is `opt-level = 0` fast enough?
