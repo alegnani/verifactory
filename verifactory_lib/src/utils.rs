@@ -2,6 +2,7 @@
 
 use std::{
     f32::consts::PI,
+    fmt,
     ops::{Add, Deref, Neg, Sub},
 };
 
@@ -209,6 +210,19 @@ impl FactorioVersion {
 impl From<u64> for FactorioVersion {
     fn from(value: u64) -> Self {
         Self::new(value)
+    }
+}
+
+impl fmt::Display for FactorioVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}.{}",
+            self.major(),
+            self.minor(),
+            self.patch(),
+            self.dev()
+        )
     }
 }
 

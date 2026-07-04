@@ -165,7 +165,7 @@ fn normalize_entities(entities: &[FBEntity<f64>]) -> Vec<FBEntity<i32>> {
 
 /// Convert entities' direction values from pre-2.0 to post-2.0.
 #[tracing::instrument(skip(entities))]
-fn fix_direction(entities: &mut [FBEntity<f64>]) {
+fn migrate_to_v2(entities: &mut [FBEntity<f64>]) {
     entities.iter_mut().for_each(|e| {
         let d = Direction::from(u8::from(e.get_base().direction) * 2);
         e.get_base_mut().direction = d;
@@ -215,6 +215,7 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
     Ok(entities)
 }
 
+#[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), blueprint_count), err)]
 fn string_to_book_or_single(blueprint_string: &str) -> Result<BookOrSingle> {
     let json = decompress_string(blueprint_string)?;
     tracing::debug!("Decompressed string");
@@ -231,9 +232,20 @@ fn string_to_book_or_single(blueprint_string: &str) -> Result<BookOrSingle> {
     for blueprint in blueprints_iter {
         // fix direction if needed
         if blueprint.version.major() < 2 {
-            fix_direction(&mut blueprint.entities);
+            tracing::debug!(
+                %blueprint.version,
+                blueprint.index,
+                "Blueprint requires migration to Factorio 2.x format"
+            );
+            migrate_to_v2(&mut blueprint.entities);
         }
     }
+
+    let count = match &blueprints {
+        BookOrSingle::Book { blueprint_book } => blueprint_book.blueprints.len(),
+        BookOrSingle::Single(_) => 1,
+    };
+    tracing::Span::current().record("blueprint_count", count);
 
     Ok(blueprints)
 }
