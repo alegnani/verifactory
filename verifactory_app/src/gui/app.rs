@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use egui::{Event, InputState, Key};
@@ -150,9 +150,9 @@ impl MyApp {
         }
     }
 
-    pub fn load_file(&mut self, file: PathBuf) -> anyhow::Result<()> {
-        let blueprint_string = std::fs::read_to_string(file.clone())?;
-        self.open_file_state.opened_file = Some(file);
+    pub fn load_file(&mut self, file: &Path) -> anyhow::Result<()> {
+        let blueprint_string = std::fs::read_to_string(file)?;
+        self.open_file_state.opened_file = Some(file.to_path_buf());
         self.load_string(&blueprint_string)
     }
 

@@ -72,7 +72,8 @@ impl MyApp {
                     }
                 });
                 if let Some(path) = path {
-                    if self.load_file(path).is_err() {
+                    if let Err(e) = self.load_file(&path) {
+                        tracing::error!(?path, ?e, "Could not load blueprint file");
                         self.show_error = true;
                     }
                 }

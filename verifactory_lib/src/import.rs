@@ -1,148 +1,80 @@
 //! Utility functions to convert a Factorio blueprint string into a list of `FBEntity`s.
 //! A description of the JSON representation of the blueprint string can be found [here](https://wiki.factorio.com/Blueprint_string_format).
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
-use serde::{de::Error, Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
-use std::fs;
+use std::{collections::HashMap, fs, num::NonZeroU32};
 
 use crate::{
     entities::*,
-    utils::{Direction, Position, Rotation},
+    utils::{Direction, FactorioVersion, Position, Rotation},
 };
 
 /// Decompresses the string such that it can be interpreted as a JSON.
-fn decompress_string(blueprint_string: &str) -> Result<Value> {
+#[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), out_len))]
+fn decompress_string(blueprint_string: &str) -> Result<String> {
     let skip_first_byte = &blueprint_string.as_bytes()[1..blueprint_string.len()];
     let base64_decoded = general_purpose::STANDARD.decode(skip_first_byte)?;
     let decoded = inflate_bytes_zlib(&base64_decoded).map_err(|s| anyhow!(s))?;
-    Ok(serde_json::from_slice(&decoded)?)
+    let s = String::from_utf8(decoded)
+        .context("blueprint contains invalid characters (not valid UTF-8)")?;
+    tracing::Span::current().record("out_len", s.len()); // print output length
+    Ok(s)
 }
 
 /// Turns a JSON string into a list of JSON substrings, each representing an entity of the blueprint.
-fn get_json_entities(json: Value) -> Result<Vec<Value>> {
-    json.get("blueprint")
-        .context("No blueprint key in json")?
-        .get("entities")
-        .context("No entities key in blueprint")?
-        .as_array()
-        .context("Entities are not an array")
-        .map(|v| v.to_owned())
+#[tracing::instrument(skip(data_json))]
+fn get_blueprints(data_json: &str) -> Result<BookOrSingle> {
+    let der = &mut serde_json::Deserializer::from_str(data_json);
+    let out = serde_path_to_error::deserialize(der)?;
+    Ok(out)
 }
 
-/// Helper function that deserializes the attributes shared by each entity.
-impl<'de> Deserialize<'de> for FBBaseEntity<f64> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value: Value = Deserialize::deserialize(deserializer)?;
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum BookOrSingle {
+    Book { blueprint_book: BlueprintBook },
+    Single(BlueprintEntry),
+}
 
-        let id = value
-            .get("entity_number")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .ok_or(Error::missing_field("entity_number"))?;
+#[derive(Debug, Clone, Deserialize)]
+struct BlueprintBook {
+    blueprints: Vec<BlueprintEntry>,
+    label: String,
+}
 
-        let position: Position<f64> = value
-            .get("position")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .ok_or(Error::missing_field("position"))?;
+type Index = NonZeroU32;
 
-        let direction = value
-            .get("direction")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or(Direction::North);
+#[derive(Debug, Clone, Deserialize)]
+struct BlueprintEntry {
+    blueprint: Blueprint<f64>,
+    index: Index,
+}
 
-        let base = FBBaseEntity {
-            id,
-            position,
-            direction,
-            throughput: 0.0,
-        };
-        Ok(base)
+impl std::ops::DerefMut for BlueprintEntry {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.blueprint
     }
 }
 
-/// Deserialization function turning each JSON string into a `FBEntity<f64>`.
-impl<'de> Deserialize<'de> for FBEntity<f64> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value: Value = Deserialize::deserialize(deserializer)?;
+impl std::ops::Deref for BlueprintEntry {
+    type Target = Blueprint<f64>;
 
-        let name = value
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or(Error::missing_field("name"))?;
-
-        let mut base: FBBaseEntity<f64> = serde_json::from_value(value.clone())
-            .map_err(|_| Error::custom("Could not deserialize BaseEntity"))?;
-        base.throughput = if name.contains("express") {
-            45.0
-        } else if name.contains("fast") {
-            30.0
-        } else {
-            15.0
-        };
-
-        if name.contains("transport-belt") {
-            Ok(Self::Belt(FBBelt { base }))
-        } else if name.contains("underground-belt") {
-            let belt_type = value
-                .get("type")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .ok_or(Error::missing_field("type"))?;
-
-            Ok(Self::Underground(FBUnderground { base, belt_type }))
-        } else if name.contains("splitter") {
-            let input_prio = value
-                .get("input_priority")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or(Priority::None);
-
-            let output_prio = value
-                .get("output_priority")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or(Priority::None);
-
-            Ok(Self::Splitter(FBSplitter {
-                base,
-                input_prio,
-                output_prio,
-            }))
-        } else if name.contains("inserter") {
-            if name.contains("long-handed") {
-                base.throughput = 1.2;
-                return Ok(Self::LongInserter(FBLongInserter { base }));
-            }
-            base.throughput = if name == "inserter" {
-                0.83
-            } else if name.contains("burner") {
-                0.6
-            } else {
-                2.31
-            };
-            Ok(Self::Inserter(FBInserter { base }))
-        } else if name.contains("assembling-machine") {
-            let tier = name
-                .strip_prefix("assembling-machine-")
-                .ok_or(Error::custom(
-                    "Error whilst deserializing assembling machine tier",
-                ))?;
-            base.throughput = match tier {
-                "1" => 0.5,
-                "2" => 0.75,
-                "3" => 1.25,
-                _ => panic!(),
-            };
-            Ok(Self::Assembler(FBAssembler { base }))
-        } else {
-            Err(format!("Invalid entity: ({})", name)).map_err(serde::de::Error::custom)
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.blueprint
     }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct Blueprint<T> {
+    description: Option<String>,
+    version: FactorioVersion,
+    entities: Vec<FBEntity<T>>,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>,
 }
 
 /// Some entities like splitters have their coordinates that are not integers.
@@ -231,18 +163,31 @@ fn normalize_entities(entities: &[FBEntity<f64>]) -> Vec<FBEntity<i32>> {
         .collect()
 }
 
+/// Convert entities' direction values from pre-2.0 to post-2.0.
+#[tracing::instrument(skip(entities))]
+fn fix_direction(entities: &mut [FBEntity<f64>]) {
+    entities.iter_mut().for_each(|e| {
+        let d = Direction::from(u8::from(e.get_base().direction) * 2);
+        e.get_base_mut().direction = d;
+    });
+}
+
 /// Parses a blueprint string, as exported from Factorio, to a list of `FBEntity`s
 ///
 /// Unsupported entities, like power poles, are skipped.
+#[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), entity_count), err)]
 pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> {
-    let json = decompress_string(blueprint_string)?;
-    let mut entities: Vec<_> = get_json_entities(json)?
-        .into_iter()
-        .flat_map(serde_json::from_value)
-        .collect::<Vec<_>>();
+    let bos = string_to_book_or_single(blueprint_string)?;
+
+    let mut entities = match bos {
+        BookOrSingle::Book { .. } => bail!("Cannot get entities of a book"),
+        BookOrSingle::Single(blueprint_entry) => blueprint_entry.blueprint.entities,
+    };
 
     snap_to_grid(&mut entities);
-    let mut entities = normalize_entities(&entities);
+    tracing::debug!("Snapped entities to grid");
+    let mut entities = normalize_entities(&mut entities);
+    tracing::debug!("Normalized entities");
 
     // add splitter phantoms
     let phantoms = entities
@@ -265,12 +210,38 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
         .map(FBEntity::AssemblerPhantom)
         .collect::<Vec<_>>();
     entities.extend(phantoms);
+
+    tracing::Span::current().record("entity_count", entities.len()); // print amount of entities
     Ok(entities)
+}
+
+fn string_to_book_or_single(blueprint_string: &str) -> Result<BookOrSingle> {
+    let json = decompress_string(blueprint_string)?;
+    tracing::debug!("Decompressed string");
+    let mut blueprints = get_blueprints(&json)?;
+    tracing::debug!("Parsed blueprint(s)");
+
+    let blueprints_iter: &mut dyn Iterator<Item = &mut BlueprintEntry> = match blueprints {
+        BookOrSingle::Book {
+            ref mut blueprint_book,
+        } => &mut blueprint_book.blueprints.iter_mut(),
+        BookOrSingle::Single(ref mut blueprint_entry) => &mut Some(blueprint_entry).into_iter(),
+    };
+
+    for blueprint in blueprints_iter {
+        // fix direction if needed
+        if blueprint.version.major() < 2 {
+            fix_direction(&mut blueprint.entities);
+        }
+    }
+
+    Ok(blueprints)
 }
 
 /// Parses a file containing a blueprint string to a list of `FBEntity`s.
 ///
 /// Unsupported entities, like power poles, are skipped.
+#[tracing::instrument(err)]
 pub fn file_to_entities(file: &str) -> Result<Vec<FBEntity<i32>>> {
     let blueprint_string = fs::read_to_string(file)?;
     string_to_entities(&blueprint_string)
@@ -293,6 +264,11 @@ mod tests {
     fn get_assembly_entities() -> Vec<FBEntity<i32>> {
         let blueprint_string = fs::read_to_string("tests/inserter_assembler").unwrap();
         string_to_entities(&blueprint_string).unwrap()
+    }
+
+    fn get_book() -> Vec<BlueprintBook> {
+        let book_string = include_str!("tests/book-balancers");
+        i
     }
 
     #[test]

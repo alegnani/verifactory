@@ -2,11 +2,10 @@
 
 use std::{
     f32::consts::PI,
-    ops::{Add, Neg, Sub},
+    ops::{Add, Deref, Neg, Sub},
 };
 
 use serde::Deserialize;
-use serde_repr::Deserialize_repr;
 
 use crate::entities::Priority;
 
@@ -21,7 +20,9 @@ impl<T> Position<T>
 where
     T: Add<Output = T> + Sub<Output = T> + Copy,
 {
-    /// Create new `Position` shifted in a given direction
+    /// Create new `Position` shifted in a given direction.
+    /// Note: `direction` must NOT be `Direction::Other`: in that case, this function will return
+    /// `self`.
     pub fn shift(&self, direction: Direction, distance: T) -> Self {
         let x = self.x;
         let y = self.y;
@@ -30,6 +31,7 @@ where
             Direction::East => (x + distance, y),
             Direction::South => (x, y - distance),
             Direction::West => (x - distance, y),
+            Direction::Other(_) => (x, y),
         };
         Self { x, y }
     }
@@ -53,13 +55,16 @@ where
 ///
 /// Represented as a C-like enum as used in the Factorio blueprint JSON.
 /// The odd numbers are used for directions that go diagonally.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize_repr)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(from = "u8")]
 #[repr(u8)]
 pub enum Direction {
-    North = 0,
-    East = 4,
-    South = 8,
-    West = 12,
+    #[default]
+    North,
+    East,
+    South,
+    West,
+    Other(u8),
 }
 
 impl Direction {
@@ -69,7 +74,7 @@ impl Direction {
             Rotation::Clockwise => 4,
             Rotation::Anticlockwise => 12,
         };
-        let new_u8 = (*self as u8 + amount * incr) % 16;
+        let new_u8 = (*self.deref() + amount * incr) % 16;
         new_u8.into()
     }
 
@@ -84,7 +89,7 @@ impl Direction {
 
     /// Returns the direction in radians
     pub fn radians(&self) -> f32 {
-        *self as u8 as f32 * PI / 8.
+        *self.deref() as f32 * PI / 8.
     }
 
     /// Returns a new `Direction` pointing in the opposite direction
@@ -94,13 +99,35 @@ impl Direction {
 }
 
 impl From<u8> for Direction {
+    /// Convert from a Factorio 2.0 direction value. Note: if using pre-2.0 direction values,
+    /// it may return the wrong variant, and such behaviour needs to be accounted for.
     fn from(value: u8) -> Self {
         match value {
             0 => Self::North,
             4 => Self::East,
             8 => Self::South,
             12 => Self::West,
-            _ => panic!("Direction is not in cardinal direction: ({})", value),
+            o => Self::Other(o),
+        }
+    }
+}
+
+impl From<Direction> for u8 {
+    fn from(d: Direction) -> u8 {
+        *d.deref()
+    }
+}
+
+impl Deref for Direction {
+    type Target = u8;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Direction::North => &0,
+            Direction::East => &4,
+            Direction::South => &8,
+            Direction::West => &12,
+            Direction::Other(o) => &o,
         }
     }
 }
@@ -147,6 +174,41 @@ impl From<Priority> for Side {
             Priority::Left => Self::Left,
             Priority::Right => Self::Right,
         }
+    }
+}
+
+#[derive(Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[serde(from = "u64")]
+pub struct FactorioVersion(u16, u16, u16, u16);
+
+impl FactorioVersion {
+    /// The version must be in factorio format: composed of 4 2-byte little endian parts.
+    pub fn new(version: u64) -> Self {
+        let parts: [u16; 4] = bytemuck::cast(version);
+        Self(
+            u16::from_le(parts[0]),
+            u16::from_le(parts[1]),
+            u16::from_le(parts[2]),
+            u16::from_le(parts[3]),
+        )
+    }
+    pub fn major(self) -> u16 {
+        self.0
+    }
+    pub fn minor(self) -> u16 {
+        self.1
+    }
+    pub fn patch(self) -> u16 {
+        self.2
+    }
+    pub fn dev(self) -> u16 {
+        self.3
+    }
+}
+
+impl From<u64> for FactorioVersion {
+    fn from(value: u64) -> Self {
+        Self::new(value)
     }
 }
 
