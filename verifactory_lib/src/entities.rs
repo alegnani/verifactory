@@ -2,7 +2,7 @@
 //!
 use crate::utils::{Direction, Position, Rotation};
 use serde::{
-    de::{Error, Unexpected, Visitor},
+    de::{Error, Unexpected},
     Deserialize, Deserializer,
 };
 use serde_json::Value;
