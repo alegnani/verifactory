@@ -4595,7 +4595,6 @@ dependencies = [
  "serde_path_to_error",
  "serde_repr",
  "tracing",
- "tracing-subscriber",
  "z3",
 ]
 
