@@ -128,7 +128,7 @@ impl Deref for Direction {
             Direction::East => &4,
             Direction::South => &8,
             Direction::West => &12,
-            Direction::Other(o) => &o,
+            Direction::Other(o) => o,
         }
     }
 }

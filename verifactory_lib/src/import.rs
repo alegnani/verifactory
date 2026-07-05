@@ -4,13 +4,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
-use serde::{de::Error, Deserialize, Deserializer};
+use serde::{de::Error, Deserialize};
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    fs,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::HashMap, fs};
 
 use crate::{
     entities::*,
@@ -85,16 +81,10 @@ struct Blueprint {
 enum BlueprintBookEntry {
     Blueprint(Blueprint),
     /// Blueprint books can also contain upgrade planners, ...
+    #[allow(unused)]
+    // otherwise deserialization fails when non-blueprint (e.g. upgrade-planner)
+    // idk why, shouldn't serde fallback to unit variant?
     Other(HashMap<String, Value>),
-}
-
-impl BlueprintBookEntry {
-    pub fn as_blueprint(self) -> Option<Blueprint> {
-        match self {
-            BlueprintBookEntry::Blueprint(b) => Some(b),
-            BlueprintBookEntry::Other(_) => None,
-        }
-    }
 }
 
 impl std::ops::DerefMut for Blueprint {
@@ -117,6 +107,7 @@ struct BlueprintContent<T> {
     label: Option<String>,
     version: FactorioVersion,
     entities: Vec<FBEntity<T>>,
+    #[allow(unused)]
     #[serde(flatten)]
     extra: HashMap<String, Value>,
 }
@@ -225,6 +216,11 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
 
     let entities = match &mut bos {
         BookOrSingle::Single(BlueprintBookEntry::Blueprint(blueprint)) => {
+            tracing::debug!(
+                blueprint.description,
+                blueprint.label,
+                "Got entities from blueprint"
+            );
             &mut blueprint.blueprint.entities
         }
         BookOrSingle::Single(d) => bail!("Cannot get entities from a non-blueprint: {d:?}"),
@@ -274,6 +270,7 @@ fn string_to_book_or_single(blueprint_string: &str) -> Result<BookOrSingle> {
     fn recursive_maybe_fix_book_or_single(b: &mut BookOrSingle, indices: &mut Vec<usize>) {
         match b {
             BookOrSingle::Book(blueprint_book) => {
+                tracing::debug!(blueprint_book.label, ?indices, "Enumerating book");
                 for (idx, b) in blueprint_book.blueprints.iter_mut().enumerate() {
                     indices.push(idx);
                     recursive_maybe_fix_book_or_single(b, indices);
