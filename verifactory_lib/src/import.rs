@@ -4,9 +4,13 @@
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::{general_purpose, Engine as _};
 use inflate::inflate_bytes_zlib;
-use serde::Deserialize;
+use serde::{de::Error, Deserialize, Deserializer};
 use serde_json::Value;
-use std::{collections::HashMap, fs, num::NonZeroU32};
+use std::{
+    collections::HashMap,
+    fs,
+    ops::{Deref, DerefMut},
+};
 
 use crate::{
     entities::*,
@@ -14,11 +18,14 @@ use crate::{
 };
 
 /// Decompresses the string such that it can be interpreted as a JSON.
-#[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), out_len))]
+#[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), out_len), err)]
 fn decompress_string(blueprint_string: &str) -> Result<String> {
     let skip_first_byte = &blueprint_string.as_bytes()[1..blueprint_string.len()];
-    let base64_decoded = general_purpose::STANDARD.decode(skip_first_byte)?;
-    let decoded = inflate_bytes_zlib(&base64_decoded).map_err(|s| anyhow!(s))?;
+    let base64_decoded = general_purpose::STANDARD
+        .decode(skip_first_byte)
+        .context("Decoding base64")?;
+    let decoded =
+        inflate_bytes_zlib(&base64_decoded).map_err(|s| anyhow!("zlib inflate error: {s}"))?;
     let s = String::from_utf8(decoded)
         .context("blueprint contains invalid characters (not valid UTF-8)")?;
     tracing::Span::current().record("out_len", s.len()); // print output length
@@ -33,35 +40,71 @@ fn get_blueprints(data_json: &str) -> Result<BookOrSingle> {
     Ok(out)
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 enum BookOrSingle {
-    Book { blueprint_book: BlueprintBook },
-    Single(BlueprintEntry),
+    Book(BlueprintBook),
+    Single(BlueprintBookEntry),
+}
+
+impl<'de> Deserialize<'de> for BookOrSingle {
+    fn deserialize<D>(deserializer: D) -> std::prelude::v1::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: Value = Deserialize::deserialize(deserializer)?;
+
+        if let Some(b) = value.get("blueprint_book") {
+            Ok(BookOrSingle::Book(
+                BlueprintBook::deserialize(b).map_err(Error::custom)?,
+            ))
+        } else {
+            Ok(BookOrSingle::Single(
+                BlueprintBookEntry::deserialize(value).map_err(Error::custom)?,
+            ))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct BlueprintBook {
-    blueprints: Vec<BlueprintEntry>,
-    label: String,
+    blueprints: Vec<BookOrSingle>,
+    label: Option<String>,
 }
 
-type Index = NonZeroU32;
+type Index = u32;
 
 #[derive(Debug, Clone, Deserialize)]
-struct BlueprintEntry {
-    blueprint: Blueprint<f64>,
+struct Blueprint {
+    blueprint: BlueprintContent<f64>,
+    #[serde(default)]
     index: Index,
 }
 
-impl std::ops::DerefMut for BlueprintEntry {
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum BlueprintBookEntry {
+    Blueprint(Blueprint),
+    /// Blueprint books can also contain upgrade planners, ...
+    Other(HashMap<String, Value>),
+}
+
+impl BlueprintBookEntry {
+    pub fn as_blueprint(self) -> Option<Blueprint> {
+        match self {
+            BlueprintBookEntry::Blueprint(b) => Some(b),
+            BlueprintBookEntry::Other(_) => None,
+        }
+    }
+}
+
+impl std::ops::DerefMut for Blueprint {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.blueprint
     }
 }
 
-impl std::ops::Deref for BlueprintEntry {
-    type Target = Blueprint<f64>;
+impl std::ops::Deref for Blueprint {
+    type Target = BlueprintContent<f64>;
 
     fn deref(&self) -> &Self::Target {
         &self.blueprint
@@ -69,8 +112,9 @@ impl std::ops::Deref for BlueprintEntry {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-struct Blueprint<T> {
+struct BlueprintContent<T> {
     description: Option<String>,
+    label: Option<String>,
     version: FactorioVersion,
     entities: Vec<FBEntity<T>>,
     #[serde(flatten)]
@@ -177,16 +221,19 @@ fn migrate_to_v2(entities: &mut [FBEntity<f64>]) {
 /// Unsupported entities, like power poles, are skipped.
 #[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), entity_count), err)]
 pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> {
-    let bos = string_to_book_or_single(blueprint_string)?;
+    let mut bos = string_to_book_or_single(blueprint_string)?;
 
-    let mut entities = match bos {
+    let entities = match &mut bos {
+        BookOrSingle::Single(BlueprintBookEntry::Blueprint(blueprint)) => {
+            &mut blueprint.blueprint.entities
+        }
+        BookOrSingle::Single(d) => bail!("Cannot get entities from a non-blueprint: {d:?}"),
         BookOrSingle::Book { .. } => bail!("Cannot get entities of a book"),
-        BookOrSingle::Single(blueprint_entry) => blueprint_entry.blueprint.entities,
     };
 
-    snap_to_grid(&mut entities);
+    snap_to_grid(entities);
     tracing::debug!("Snapped entities to grid");
-    let mut entities = normalize_entities(&mut entities);
+    let mut entities = normalize_entities(entities);
     tracing::debug!("Normalized entities");
 
     // add splitter phantoms
@@ -217,32 +264,42 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
 
 #[tracing::instrument(skip(blueprint_string), fields(in_len = blueprint_string.len(), blueprint_count), err)]
 fn string_to_book_or_single(blueprint_string: &str) -> Result<BookOrSingle> {
-    let json = decompress_string(blueprint_string)?;
-    tracing::debug!("Decompressed string");
+    let json = decompress_string(blueprint_string.trim_end())?;
+    tracing::debug!(%json, "Decompressed string");
     let mut blueprints = get_blueprints(&json)?;
     tracing::debug!("Parsed blueprint(s)");
 
-    let blueprints_iter: &mut dyn Iterator<Item = &mut BlueprintEntry> = match blueprints {
-        BookOrSingle::Book {
-            ref mut blueprint_book,
-        } => &mut blueprint_book.blueprints.iter_mut(),
-        BookOrSingle::Single(ref mut blueprint_entry) => &mut Some(blueprint_entry).into_iter(),
-    };
-
-    for blueprint in blueprints_iter {
-        // fix direction if needed
-        if blueprint.version.major() < 2 {
-            tracing::debug!(
-                %blueprint.version,
-                blueprint.index,
-                "Blueprint requires migration to Factorio 2.x format"
-            );
-            migrate_to_v2(&mut blueprint.entities);
-        }
+    /// recurse into a (maybe) book and fix every blueprint, if needed. TODO: Maybe
+    /// generalize function later, e.g. for normalizing an entire book and stuff.
+    fn recursive_maybe_fix_book_or_single(b: &mut BookOrSingle, indices: &mut Vec<usize>) {
+        match b {
+            BookOrSingle::Book(blueprint_book) => {
+                for (idx, b) in blueprint_book.blueprints.iter_mut().enumerate() {
+                    indices.push(idx);
+                    recursive_maybe_fix_book_or_single(b, indices);
+                    indices.pop();
+                }
+            }
+            BookOrSingle::Single(BlueprintBookEntry::Blueprint(blueprint))
+                if blueprint.version.major() < 2 =>
+            {
+                indices.push(blueprint.index as _);
+                tracing::debug!(
+                    %blueprint.version,
+                    ?indices,
+                    "Blueprint requires migration to Factorio 2.x format"
+                );
+                migrate_to_v2(&mut blueprint.entities);
+                indices.pop();
+            }
+            _ => (),
+        };
     }
 
+    recursive_maybe_fix_book_or_single(&mut blueprints, &mut vec![]);
+
     let count = match &blueprints {
-        BookOrSingle::Book { blueprint_book } => blueprint_book.blueprints.len(),
+        BookOrSingle::Book(blueprint_book) => blueprint_book.blueprints.len(),
         BookOrSingle::Single(_) => 1,
     };
     tracing::Span::current().record("blueprint_count", count);
@@ -267,20 +324,24 @@ mod tests {
     };
 
     use super::*;
-    use std::fs;
     fn get_belt_entities() -> Vec<FBEntity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/belts").unwrap();
+        let blueprint_string = include_str!("../tests/belts");
         string_to_entities(&blueprint_string).unwrap()
     }
 
     fn get_assembly_entities() -> Vec<FBEntity<i32>> {
-        let blueprint_string = fs::read_to_string("tests/inserter_assembler").unwrap();
+        let blueprint_string = include_str!("../tests/inserter_assembler");
         string_to_entities(&blueprint_string).unwrap()
     }
 
-    fn get_book() -> Vec<BlueprintBook> {
-        let book_string = include_str!("tests/book-balancers");
-        i
+    fn get_book() -> BlueprintBook {
+        let book_string = include_str!("../tests/book-balancers");
+        match string_to_book_or_single(book_string).unwrap() {
+            BookOrSingle::Book(blueprint_book) => blueprint_book,
+            BookOrSingle::Single(_) => {
+                panic!("Was supposed to load a book, loaded a single blueprint instead")
+            }
+        }
     }
 
     #[test]
@@ -375,5 +436,10 @@ mod tests {
         }
         println!("{:?}", &entities);
         assert_eq!(entities.len(), 9 + 3);
+    }
+
+    #[test]
+    fn load_book() {
+        let _b = get_book();
     }
 }

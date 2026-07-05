@@ -6,12 +6,9 @@ use serde::{
     Deserialize, Deserializer,
 };
 use serde_json::Value;
-use std::{
-    num::NonZeroI32,
-    ops::{Add, Sub},
-};
+use std::ops::{Add, Sub};
 
-pub type EntityId = NonZeroI32;
+pub type EntityId = i32;
 
 /// Contains the subset of fields each entity possesses
 #[derive(Debug, Copy, Clone, Deserialize)]
