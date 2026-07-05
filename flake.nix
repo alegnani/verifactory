@@ -39,7 +39,7 @@
         craneLib = crane.mkLib pkgs;
         src = craneLib.cleanCargoSource ./.;
         # Crane: common arguments for building
-        commonArgs = {
+        commonArgs = rec {
           inherit src;
           strictDeps = true;
 
@@ -49,12 +49,17 @@
             wayland
             libGL
             libxkbcommon
+            vulkan-loader
+            vulkan-tools
+            vulkan-headers
           ];
 
           nativeBuildInputs = with pkgs; [
             pkg-config
             makeWrapper
           ];
+
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
@@ -68,6 +73,11 @@
 
           # Don't run tests normally: cargo-nextest runs them
           doCheck = false;
+
+          postFixup = ''
+            wrapProgram $out/bin/verifactory_app \
+              --prefix LD_LIBRARY_PATH : ${commonArgs.LD_LIBRARY_PATH}
+          '';
         };
 
         fileSetForCrate =
@@ -84,26 +94,14 @@
           };
         verifactory_app = craneLib.buildPackage (
           individualCrateArgs
-          // rec {
+          // {
             pname = "verifactory_app";
             cargoExtraArgs = "-p verifactory_app";
             src = fileSetForCrate ./verifactory_app;
-
-            dlopenDeps = with pkgs; [
-              wayland
-              libGL
-              libxkbcommon
-            ];
-
-            postFixup = ''
-              wrapProgram $out/bin/verifactory_app \
-                --prefix LD_LIBRARY_PATH : ${LD_LIBRARY_PATH}
-            '';
-            LD_LIBRARY_PATH = "${lib.makeLibraryPath dlopenDeps}";
           }
         );
       in
-      rec {
+      {
         packages = {
           inherit verifactory_app;
         };
@@ -156,24 +154,18 @@
           );
         };
 
-        defaultPackage = packages.verifactory_app;
+        defaultPackage = verifactory_app;
 
         apps.default = flake-utils.lib.mkApp {
           name = "verifactory_app";
           drv = verifactory_app;
         };
 
-        devShells.default = craneLib.devShell rec {
+        devShells.default = craneLib.devShell {
           checks = self.checks.${system};
-
-          dlopenDeps = with pkgs; [
-            wayland
-            libGL
-            libxkbcommon
-          ];
-
-          LD_LIBRARY_PATH = "${lib.makeLibraryPath dlopenDeps}";
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+          inputsFrom = [ verifactory_app ];
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath commonArgs.buildInputs}";
         };
       }
     );

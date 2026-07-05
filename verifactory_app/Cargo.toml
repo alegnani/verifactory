@@ -10,11 +10,14 @@ anyhow = "1.0.100"
 eframe = "0.32.3"
 egui = "0.32.3"
 egui-toast = "0.18.0"
-egui_extras = { version = "0.32.3", features = ["all_loaders"]}
+egui_extras = { version = "0.32.3", features = ["all_loaders"] }
 egui_file = "0.23.1"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 verifactory_lib = { path = "../verifactory_lib" }
 
 [features]
+default = ["wgpu"]
 build_z3 = ["verifactory_lib/build_z3"]
+glow = ["eframe/glow"]
+wgpu = ["eframe/wgpu"]
