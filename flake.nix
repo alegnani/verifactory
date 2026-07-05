@@ -1,42 +1,172 @@
 {
-  description = "Rust overlay";
+  description = "A verifier for Factorio blueprints";
 
   inputs = {
-    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    flake-utils.url  = "github:numtide/flake-utils";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      crane,
+      rust-overlay,
+      flake-utils,
+      advisory-db,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
-        overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
-          inherit system overlays;
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
         };
-        rust = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "rust-src" "cargo" "rustc"];
-        }; 
-      in
-      with pkgs;
-      {
-        devShells.default = mkShell rec {
-          buildInputs = [
-            cmake
-            rust
+        inherit (pkgs) lib;
+
+        # =========================================
+        # Rust crane build system for nix
+        # =========================================
+        craneLib = crane.mkLib pkgs;
+        src = craneLib.cleanCargoSource ./.;
+        # Crane: common arguments for building
+        commonArgs = rec {
+          inherit src;
+          strictDeps = true;
+
+          buildInputs = with pkgs; [
             z3
+            llvmPackages.libclang
             wayland
             libGL
             libxkbcommon
+            vulkan-loader
+            vulkan-tools
+            vulkan-headers
+          ];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            makeWrapper
           ];
 
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
-          # LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
-          nativeBuildInputs = [ rustPlatform.bindgenHook ];
 
-          RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+        };
+
+        # Build the dependencies
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        individualCrateArgs = commonArgs // {
+          inherit cargoArtifacts;
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+
+          # Don't run tests normally: cargo-nextest runs them
+          doCheck = false;
+
+          postFixup = ''
+            wrapProgram $out/bin/verifactory_app \
+              --prefix LD_LIBRARY_PATH : ${commonArgs.LD_LIBRARY_PATH}
+          '';
+        };
+
+        fileSetForCrate =
+          crate:
+          lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./Cargo.toml
+              ./Cargo.lock
+              (craneLib.fileset.commonCargoSources ./verifactory_lib)
+              (craneLib.fileset.commonCargoSources crate)
+              (crate + "/imgs")
+            ];
+          };
+        verifactory_app = craneLib.buildPackage (
+          individualCrateArgs
+          // {
+            pname = "verifactory_app";
+            cargoExtraArgs = "-p verifactory_app";
+            src = fileSetForCrate ./verifactory_app;
+          }
+        );
+      in
+      {
+        packages = {
+          inherit verifactory_app;
+        };
+
+        checks = {
+          clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+            }
+          );
+
+          doc = craneLib.cargoDoc (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              env.RUSTDOCFLAGS = "--deny warnings";
+            }
+          );
+
+          # Check formatting
+          fmt = craneLib.cargoFmt {
+            inherit src;
+          };
+
+          toml-fmt = craneLib.taploFmt {
+            src = pkgs.lib.sources.sourceFilesBySuffices src [ ".toml" ];
+          };
+
+          # Audit dependencies
+          audit = craneLib.cargoAudit {
+            inherit src advisory-db;
+          };
+
+          # Audit licenses
+          deny = craneLib.cargoDeny {
+            inherit src;
+          };
+
+          # Run tests with cargo-nextest
+          nextest = craneLib.cargoNextest (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              partitions = 1;
+              partitionType = "count";
+              cargoNextestPartitionsExtraArgs = "--no-tests=pass";
+            }
+          );
+        };
+
+        defaultPackage = verifactory_app;
+
+        apps.default = flake-utils.lib.mkApp {
+          name = "verifactory_app";
+          drv = verifactory_app;
+        };
+
+        devShells.default = craneLib.devShell {
+          checks = self.checks.${system};
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+          inputsFrom = [ verifactory_app ];
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath commonArgs.buildInputs}";
         };
       }
     );
 }
-
