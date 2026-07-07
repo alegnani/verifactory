@@ -20,6 +20,7 @@ impl ShrinkDirection for Rect {
             Direction::East => rect.max += Vec2::new(-amount, 0.),
             Direction::South => rect.max += Vec2::new(0., -amount),
             Direction::West => rect.min += Vec2::new(amount, 0.),
+            _ => (),
         }
         rect
     }
@@ -195,6 +196,7 @@ impl MyApp {
                 Direction::West => {
                     Image::new(egui::include_image!("../../imgs/yellow_splitter_6.png"))
                 }
+                _ => todo!("Fallback image"),
             },
             x => match x {
                 FBEntity::Underground(u) if u.belt_type == BeltType::Input => Image::new(
@@ -212,7 +214,7 @@ impl MyApp {
                         Image::new(egui::include_image!("../../imgs/yellow_belt_clock.png"))
                     }
                 },
-                _ => panic!(),
+                _ => todo!("Fallback image"),
             }
             .rotate(rotation, Vec2::splat(0.5)),
         }
