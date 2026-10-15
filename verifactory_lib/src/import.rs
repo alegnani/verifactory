@@ -219,6 +219,7 @@ pub fn string_to_entities(blueprint_string: &str) -> Result<Vec<FBEntity<i32>>> 
             tracing::debug!(
                 blueprint.description,
                 blueprint.label,
+                %blueprint.version,
                 "Got entities from blueprint"
             );
             &mut blueprint.blueprint.entities
@@ -338,6 +339,30 @@ mod tests {
             BookOrSingle::Single(_) => {
                 panic!("Was supposed to load a book, loaded a single blueprint instead")
             }
+        }
+    }
+
+    #[test]
+    fn blueprint_version() {
+        let get_blueprint = |b| {
+            let bos = string_to_book_or_single(b).unwrap();
+            let BookOrSingle::Single(BlueprintBookEntry::Blueprint(b)) = bos else {
+                panic!("This test only supports single blueprints")
+            };
+            b
+        };
+
+        let dt: [(&str, [u16; 4]); _] = [
+            (include_str!("../tests/belts"), [2, 0, 15, 4]),
+            (include_str!("../tests/8-8-tu"), [2, 0, 69, 0]),
+        ];
+
+        for (s, [major, minor, patch, dev]) in dt {
+            let b = get_blueprint(s);
+            assert_eq!(b.version.major(), major);
+            assert_eq!(b.version.minor(), minor);
+            assert_eq!(b.version.patch(), patch);
+            assert_eq!(b.version.dev(), dev);
         }
     }
 

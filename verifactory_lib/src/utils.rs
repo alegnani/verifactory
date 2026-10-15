@@ -185,12 +185,12 @@ pub struct FactorioVersion(u16, u16, u16, u16);
 impl FactorioVersion {
     /// The version must be in factorio format: composed of 4 2-byte little endian parts.
     pub fn new(version: u64) -> Self {
-        let parts: [u16; 4] = bytemuck::cast(version);
+        let parts: [u16; 4] = bytemuck::cast(version.to_le());
         Self(
-            u16::from_le(parts[0]),
-            u16::from_le(parts[1]),
-            u16::from_le(parts[2]),
             u16::from_le(parts[3]),
+            u16::from_le(parts[2]),
+            u16::from_le(parts[1]),
+            u16::from_le(parts[0]),
         )
     }
     pub fn major(self) -> u16 {
